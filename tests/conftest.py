@@ -28,6 +28,9 @@ APP_ORIGIN = os.environ["APP_ORIGIN"]
 
 @pytest.fixture(scope="session", autouse=True)
 async def _indexed():
+    from app.modules.agents import load_all
+
+    load_all()
     await ensure_indexes(database())
 
 
