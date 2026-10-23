@@ -23,8 +23,12 @@ Copy `.env.example` to `.env`:
 
 ```bash
 uv sync
+uv run alembic upgrade head
+uv run python -m app.cli create-superadmin --email you@example.com --name "Your Name"
 uv run fastapi dev app/main.py
 ```
+
+`create-superadmin` prompts for the password twice; no default accounts exist.
 
 ## Test
 
