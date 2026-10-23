@@ -8,6 +8,7 @@ from app.core.db import Db, in_transaction
 from app.core.documents import now
 from app.core.errors import Conflict, NotFound
 from app.core.pagination import _PageParams
+from app.modules.artifacts.service import mark_dependents_stale
 from app.modules.auth.models import User, UserRole
 from app.modules.projects.models import Project, ProjectSpecification, ProjectStatus
 from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
@@ -185,5 +186,7 @@ async def save_specification(db: Db, user: User, project_id: uuid.UUID, data: Sp
         if new_name:
             update["name"] = new_name
         await db.projects.update_one({"_id": project.id}, {"$set": update})
+        # Requirements built from an older spec revision are now stale.
+        await mark_dependents_stale(db, project, "specification", spec.revision)
         return _spec_out(spec)
     raise AssertionError("unreachable")

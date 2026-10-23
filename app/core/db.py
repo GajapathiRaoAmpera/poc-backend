@@ -84,6 +84,22 @@ INDEXES: dict[str, list[IndexModel]] = {
         # Idempotent agent writes: one revision per run (absent for user edits).
         IndexModel([("run_id", ASCENDING)], unique=True, sparse=True),
     ],
+    "agent_runs": [
+        IndexModel([("project_id", ASCENDING), ("stage", ASCENDING), ("created_at", DESCENDING)]),
+        IndexModel([("created_by", ASCENDING), ("created_at", DESCENDING)]),
+        # At most one active (QUEUED/RUNNING) run per project stage.
+        IndexModel(
+            [("project_id", ASCENDING), ("stage", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"active": True},
+            name="one_active_run_per_stage",
+        ),
+    ],
+    "jobs": [
+        IndexModel([("status", ASCENDING), ("run_after", ASCENDING)]),
+        IndexModel([("run_id", ASCENDING)], unique=True),
+    ],
+    "run_events": [IndexModel([("project_id", ASCENDING), ("seq", ASCENDING)], unique=True)],
     "approvals": [
         IndexModel([("project_id", ASCENDING), ("kind", ASCENDING), ("decided_at", DESCENDING)])
     ],
