@@ -1,8 +1,5 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import update
-
-from app.modules.auth.models import LoginAttempt
 from tests.factories import DEFAULT_PASSWORD, make_user
 
 WRONG = {"email": "ana@x.com", "password": "wrong-password-1"}
@@ -22,10 +19,9 @@ async def test_old_failures_do_not_count(client, db):
     await make_user(db, email="ana@x.com")
     for _ in range(5):
         await client.post("/api/v1/auth/login", json=WRONG)
-    await db.execute(
-        update(LoginAttempt).values(created_at=datetime.now(UTC) - timedelta(minutes=16))
+    await db.login_attempts.update_many(
+        {}, {"$set": {"created_at": datetime.now(UTC) - timedelta(minutes=16)}}
     )
-    await db.commit()
     assert (await client.post("/api/v1/auth/login", json=RIGHT)).status_code == 200
 
 

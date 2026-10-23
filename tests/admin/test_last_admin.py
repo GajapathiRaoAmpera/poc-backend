@@ -1,5 +1,3 @@
-from sqlalchemy import select
-
 from app.modules.auth.models import User, UserRole
 from tests.factories import login, make_user
 
@@ -19,7 +17,7 @@ async def test_last_admin_cannot_be_demoted_disabled_or_deleted(client, db):
         assert r.status_code == 409, body
         assert "last" in r.json()["error"]["message"].lower()
     assert (await client.delete(f"{BASE}/{root.id}")).status_code == 409
-    role = (await db.execute(select(User.role).where(User.id == root.id))).scalar_one()
+    role = (await db.users.find_one({"_id": root.id}))["role"]
     assert role == UserRole.SUPER_ADMIN
 
 

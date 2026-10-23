@@ -2,10 +2,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select, update
 
 from app.modules.auth import service
-from app.modules.auth.models import PasswordResetToken
 from tests.factories import login, make_user
 
 NEW_PASSWORD = "brand-new-password-9"
@@ -34,7 +32,7 @@ async def test_reset_request_always_202(client, db):
     await make_user(db, email="ana@x.com")
     assert (await _request_reset(client, "ana@x.com")).status_code == 202
     assert (await _request_reset(client, "nobody@x.com")).status_code == 202
-    count = (await db.execute(select(func.count()).select_from(PasswordResetToken))).scalar()
+    count = await db.password_reset_tokens.count_documents({})
     assert count == 1
 
 
@@ -62,10 +60,9 @@ async def test_reset_confirm_works_once_and_revokes_sessions(
 async def test_reset_token_expires(client, db, issued_tokens):
     await make_user(db, email="ana@x.com")
     await _request_reset(client, "ana@x.com")
-    await db.execute(
-        update(PasswordResetToken).values(expires_at=datetime.now(UTC) - timedelta(minutes=1))
+    await db.password_reset_tokens.update_many(
+        {}, {"$set": {"expires_at": datetime.now(UTC) - timedelta(minutes=1)}}
     )
-    await db.commit()
     r = await client.post(
         "/api/v1/auth/password-reset/confirm",
         json={"token": issued_tokens[-1], "password": NEW_PASSWORD},

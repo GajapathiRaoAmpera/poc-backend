@@ -1,10 +1,7 @@
 import asyncio
 
-from sqlalchemy import select
-
 from app import cli
-from app.modules.audit.models import AuditLog
-from app.modules.auth.models import User, UserRole
+from app.modules.auth.models import UserRole
 
 
 async def test_cli_creates_superadmin(monkeypatch, db):
@@ -14,10 +11,11 @@ async def test_cli_creates_superadmin(monkeypatch, db):
         cli.main, ["create-superadmin", "--email", "Root@X.com", "--name", "Root"]
     )
     assert code == 0
-    user = (await db.execute(select(User))).scalar_one()
-    assert user.email == "root@x.com"
-    assert user.role == UserRole.SUPER_ADMIN
-    actions = (await db.execute(select(AuditLog.action))).scalars().all()
+    users = await db.users.find({}).to_list()
+    assert len(users) == 1
+    assert users[0]["email"] == "root@x.com"
+    assert users[0]["role"] == UserRole.SUPER_ADMIN
+    actions = [d["action"] async for d in db.audit_logs.find({})]
     assert actions == ["user.bootstrap_superadmin"]
 
 
@@ -26,7 +24,7 @@ async def test_cli_mismatched_passwords(monkeypatch, db):
     monkeypatch.setattr(cli, "getpass", lambda prompt="": next(answers))
     code = await asyncio.to_thread(cli.main, ["create-superadmin", "--email", "root@x.com"])
     assert code != 0
-    assert (await db.execute(select(User))).first() is None
+    assert await db.users.count_documents({}) == 0
 
 
 async def test_cli_password_stdin(monkeypatch, db):
@@ -37,7 +35,7 @@ async def test_cli_password_stdin(monkeypatch, db):
         cli.main, ["create-superadmin", "--email", "root@x.com", "--password-stdin"]
     )
     assert code == 0
-    assert (await db.execute(select(User.role))).scalar_one() == UserRole.SUPER_ADMIN
+    assert (await db.users.find_one({}))["role"] == UserRole.SUPER_ADMIN
 
 
 async def test_cli_weak_password_rejected(monkeypatch, db):

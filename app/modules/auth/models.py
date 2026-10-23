@@ -2,11 +2,9 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import CITEXT
-from sqlalchemy.orm import Mapped, mapped_column
+from pydantic import Field
 
-from app.core.models import Base, Timestamps, UUIDPk
+from app.core.documents import Document, Timestamped, now
 
 
 class UserRole(StrEnum):
@@ -19,51 +17,43 @@ class UserStatus(StrEnum):
     DISABLED = "DISABLED"
 
 
-class User(UUIDPk, Timestamps, Base):
-    __tablename__ = "users"
+class User(Timestamped):
+    """Collection ``users``. ``email`` is stored lower-cased (unique index)."""
 
-    email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role"), nullable=False, default=UserRole.USER
-    )
-    status: Mapped[UserStatus] = mapped_column(
-        Enum(UserStatus, name="user_status"), nullable=False, default=UserStatus.ACTIVE
-    )
-    daily_run_limit: Mapped[int | None] = mapped_column(Integer)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email: str
+    name: str
+    password_hash: str
+    role: UserRole = UserRole.USER
+    status: UserStatus = UserStatus.ACTIVE
+    daily_run_limit: int | None = None
+    last_login_at: datetime | None = None
 
 
-class Session(UUIDPk, Timestamps, Base):
-    __tablename__ = "sessions"
+class Session(Document):
+    """Collection ``sessions``. Only the SHA-256 of the cookie token is stored."""
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
-    )
-    token_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), index=True, nullable=False
-    )
-    ip: Mapped[str | None] = mapped_column(Text)
-    user_agent: Mapped[str | None] = mapped_column(Text)
+    user_id: uuid.UUID
+    token_hash: str
+    expires_at: datetime
+    ip: str | None = None
+    user_agent: str | None = None
+    created_at: datetime = Field(default_factory=now)
 
 
-class PasswordResetToken(UUIDPk, Timestamps, Base):
-    __tablename__ = "password_reset_tokens"
+class PasswordResetToken(Document):
+    """Collection ``password_reset_tokens``."""
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    token_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user_id: uuid.UUID
+    token_hash: str
+    expires_at: datetime
+    used_at: datetime | None = None
+    created_at: datetime = Field(default_factory=now)
 
 
-class LoginAttempt(UUIDPk, Timestamps, Base):
-    __tablename__ = "login_attempts"
-    __table_args__ = (Index("ix_login_attempts_email_ip_created", "email", "ip", "created_at"),)
+class LoginAttempt(Document):
+    """Collection ``login_attempts`` (TTL: 24 h)."""
 
-    email: Mapped[str] = mapped_column(CITEXT, nullable=False)
-    ip: Mapped[str] = mapped_column(Text, nullable=False)
-    succeeded: Mapped[bool] = mapped_column(nullable=False)
+    email: str
+    ip: str
+    succeeded: bool
+    created_at: datetime = Field(default_factory=now)

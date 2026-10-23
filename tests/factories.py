@@ -1,5 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.core.db import Db
 from app.core.security import hash_password
 from app.modules.auth.models import User, UserRole, UserStatus
 
@@ -7,7 +6,7 @@ DEFAULT_PASSWORD = "correct-horse-1"
 
 
 async def make_user(
-    db: AsyncSession,
+    db: Db,
     email: str = "ana@example.com",
     password: str = DEFAULT_PASSWORD,
     role: UserRole = UserRole.USER,
@@ -17,9 +16,7 @@ async def make_user(
     user = User(
         email=email, name=name, password_hash=hash_password(password), role=role, status=status
     )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    await db.users.insert_one(user.to_doc())
     return user
 
 

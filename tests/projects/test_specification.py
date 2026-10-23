@@ -1,9 +1,7 @@
 import asyncio
 
 import pytest
-from sqlalchemy import select
 
-from app.modules.projects.models import ProjectSpecification
 from tests.factories import login, make_user
 
 FULL = {
@@ -58,13 +56,9 @@ async def test_revisions_append_only(client, db, project):
     assert latest["revision"] == 2
     assert latest["data"]["constraints"]["budget"]["currency"] == "USD"
 
-    rows = (
-        (await db.execute(select(ProjectSpecification).order_by(ProjectSpecification.revision)))
-        .scalars()
-        .all()
-    )
-    assert [r.revision for r in rows] == [1, 2]
-    assert rows[0].data == {"basics": {"name": "First"}}
+    rows = await db.project_specifications.find({}).sort("revision", 1).to_list()
+    assert [r["revision"] for r in rows] == [1, 2]
+    assert rows[0]["data"] == {"basics": {"name": "First"}}
 
 
 async def test_basics_name_renames_project_and_completeness(client, project):
@@ -110,5 +104,5 @@ async def test_concurrent_puts(client, db, project):
     )
     codes = [r.status_code for r in results]
     assert set(codes) <= {201, 409}, codes
-    revisions = (await db.execute(select(ProjectSpecification.revision))).scalars().all()
+    revisions = [d["revision"] async for d in db.project_specifications.find({})]
     assert len(revisions) == len(set(revisions)) == codes.count(201)

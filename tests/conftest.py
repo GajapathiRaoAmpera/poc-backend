@@ -2,22 +2,43 @@ import os
 
 from tests.safety import assert_safe_test_database
 
-# Never inherit DATABASE_URL from the shell: the suite truncates and drops tables.
-TEST_DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:54329/ampera_test"
+# Never inherit MONGODB_URI from the shell or .env: the suite deletes every document.
+TEST_MONGODB_URI = os.environ.get(
+    "TEST_MONGODB_URI", "mongodb://localhost:27018/?directConnection=true"
 )
-assert_safe_test_database(TEST_DATABASE_URL)
-os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+TEST_MONGODB_DB = os.environ.get("TEST_MONGODB_DB", "ampera_test")
+assert_safe_test_database(TEST_MONGODB_URI, TEST_MONGODB_DB)
+os.environ["MONGODB_URI"] = TEST_MONGODB_URI
+os.environ["MONGODB_DB"] = TEST_MONGODB_DB
 os.environ["ENVIRONMENT"] = "test"
-os.environ.pop("TRUSTED_PROXY_IPS", None)
 os.environ["APP_ORIGIN"] = "http://localhost:3000"
+os.environ.pop("TRUSTED_PROXY_IPS", None)
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 
+from app.core.db import INDEXES, database, ensure_indexes  # noqa: E402
 from app.main import create_app  # noqa: E402
 
 APP_ORIGIN = os.environ["APP_ORIGIN"]
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def _indexed():
+    await ensure_indexes(database())
+
+
+@pytest.fixture(autouse=True)
+async def _clean_collections():
+    yield
+    db = database()
+    for name in [*INDEXES, "locks"]:
+        await db[name].delete_many({})
+
+
+@pytest.fixture
+def db():
+    return database()
 
 
 @pytest.fixture
@@ -32,37 +53,6 @@ async def client(app):
         transport=transport, base_url="http://test", headers={"Origin": APP_ORIGIN}
     ) as c:
         yield c
-
-
-@pytest.fixture(scope="session", autouse=True)
-async def _migrated():
-    import asyncio
-
-    from alembic import command
-    from alembic.config import Config
-
-    await asyncio.to_thread(command.upgrade, Config("alembic.ini"), "head")
-
-
-@pytest.fixture(autouse=True)
-async def _clean_tables():
-    yield
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.models import Base
-
-    names = ", ".join(t.name for t in Base.metadata.sorted_tables)
-    async with engine.begin() as conn:
-        await conn.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
-
-
-@pytest.fixture
-async def db():
-    from app.core.db import SessionLocal
-
-    async with SessionLocal() as session:
-        yield session
 
 
 @pytest.fixture

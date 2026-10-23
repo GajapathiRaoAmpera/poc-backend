@@ -1,9 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
-
 from app.core.security import hash_token
-from app.modules.auth.models import Session, UserStatus
+from app.modules.auth.models import UserStatus
 from tests.factories import DEFAULT_PASSWORD, login, make_user
 
 REGISTER = {"name": "Ana", "email": " Ana@X.com ", "password": DEFAULT_PASSWORD}
@@ -82,8 +80,9 @@ async def test_me_without_cookie_is_401(client):
 async def test_expired_session_rejected(client, db):
     await make_user(db, email="ana@x.com")
     await login(client, "ana@x.com")
-    await db.execute(update(Session).values(expires_at=datetime.now(UTC) - timedelta(seconds=1)))
-    await db.commit()
+    await db.sessions.update_many(
+        {}, {"$set": {"expires_at": datetime.now(UTC) - timedelta(seconds=1)}}
+    )
     assert (await client.get("/api/v1/auth/me")).status_code == 401
 
 
@@ -94,30 +93,26 @@ async def test_session_sliding_expiry(client, db):
 
     # Extended 10 minutes ago: left alone.
     recent = now + timedelta(days=7) - timedelta(minutes=10)
-    await db.execute(update(Session).values(expires_at=recent))
-    await db.commit()
+    await db.sessions.update_many({}, {"$set": {"expires_at": recent}})
     await client.get("/api/v1/auth/me")
-    db.expire_all()
-    s = (await db.execute(select(Session))).scalar_one()
-    assert abs((s.expires_at - recent).total_seconds()) < 1
+    s = await db.sessions.find_one({})
+    assert abs((s["expires_at"] - recent).total_seconds()) < 1
 
     # Extended 2 hours ago: pushed to now + 7 days.
     stale = now + timedelta(days=7) - timedelta(hours=2)
-    await db.execute(update(Session).values(expires_at=stale))
-    await db.commit()
+    await db.sessions.update_many({}, {"$set": {"expires_at": stale}})
     await client.get("/api/v1/auth/me")
-    db.expire_all()
-    s = (await db.execute(select(Session))).scalar_one()
-    assert s.expires_at > now + timedelta(days=7) - timedelta(minutes=1)
+    s = await db.sessions.find_one({})
+    assert s["expires_at"] > now + timedelta(days=7) - timedelta(minutes=1)
 
 
 async def test_session_db_stores_hash_only(client, db):
     await make_user(db, email="ana@x.com")
     await login(client, "ana@x.com")
     raw = client.cookies.get("ampera_session")
-    s = (await db.execute(select(Session))).scalar_one()
-    assert s.token_hash != raw
-    assert s.token_hash == hash_token(raw)
+    s = await db.sessions.find_one({})
+    assert s["token_hash"] != raw
+    assert s["token_hash"] == hash_token(raw)
 
 
 async def test_login_updates_last_login(client, db):
@@ -132,8 +127,9 @@ async def test_rejected_session_cookie_is_cleared(client, db):
     """A stale cookie must be removed, or the web app's redirect guard loops forever."""
     await make_user(db, email="ana@x.com")
     await login(client, "ana@x.com")
-    await db.execute(update(Session).values(expires_at=datetime.now(UTC) - timedelta(seconds=1)))
-    await db.commit()
+    await db.sessions.update_many(
+        {}, {"$set": {"expires_at": datetime.now(UTC) - timedelta(seconds=1)}}
+    )
     r = await client.get("/api/v1/projects")
     assert r.status_code == 401
     set_cookie = r.headers.get("set-cookie", "")

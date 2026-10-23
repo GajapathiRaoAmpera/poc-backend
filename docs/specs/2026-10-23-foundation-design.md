@@ -361,3 +361,22 @@ No test touches Supabase or Groq.
 - **Open sign-up + Groq costs (B onward):** mitigated by per-user `daily_run_limit` and the Super Admin's ability to disable accounts.
 - **Supabase pooler mode misconfiguration:** documented; app checks connectivity at startup and fails with a clear message.
 - **Two repos without a shared contract package:** frontend zod schemas mirror backend Pydantic models manually; the backend's OpenAPI document is the source of truth and a later step may generate the client from it.
+
+## Addendum (2026-10-23): database switched from PostgreSQL to MongoDB
+
+Decided by the product owner after implementation. The HTTP API, frontend and behaviour are unchanged.
+
+| Postgres mechanism | MongoDB replacement |
+|---|---|
+| Tables + Alembic migrations | Collections; `ensure_indexes()` on startup and `app.cli init-db` (idempotent) |
+| `citext` unique email | Email stored lower-cased + unique index |
+| Unique `(project_id, revision)` | Same, as a unique compound index; save retries once, then 409 |
+| `SELECT … FOR UPDATE` on admins | Transaction that writes a shared guard document (`locks/super_admins`) so concurrent demotions conflict instead of write-skewing |
+| `ON DELETE CASCADE` | Explicit deletes of sessions, reset tokens, projects and specs inside one transaction |
+| Reset token row lock | Atomic `find_one_and_update` matching `used_at: null` |
+| Manual pruning (not implemented) | TTL indexes on sessions, reset tokens (`expires_at`) and login attempts (24 h) |
+| `ILIKE` search | Case-insensitive regex on `re.escape`d input |
+
+Requirements: MongoDB must be a replica set (Atlas always is). Local tests use `mongo:9.0` as a
+single-node replica set because MongoDB 8.x does not start on Linux kernel ≥ 6.19 (SERVER-121912).
+Configuration: `MONGODB_URI`, `MONGODB_DB` replace `DATABASE_URL`.

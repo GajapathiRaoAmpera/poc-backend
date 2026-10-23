@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import SESSION_COOKIE, CurrentUser, DbSession, client_ip
@@ -29,9 +28,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
-async def _start_session(
-    db: AsyncSession, user: User, request: Request, response: Response
-) -> None:
+async def _start_session(db: DbSession, user: User, request: Request, response: Response) -> None:
     token = await service.create_session(
         db, user, client_ip(request), request.headers.get("user-agent")
     )

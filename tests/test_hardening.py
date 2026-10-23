@@ -7,34 +7,31 @@ from tests.safety import assert_safe_test_database
 
 def test_environment_defaults_to_production(monkeypatch):
     monkeypatch.delenv("ENVIRONMENT", raising=False)
-    s = Settings(_env_file=None, database_url="postgresql+asyncpg://x/y")
+    s = Settings(_env_file=None, mongodb_uri="mongodb://x")
     assert s.environment == "production"
     assert s.secure_cookies is True
 
 
 @pytest.mark.parametrize(
-    "url",
+    ("uri", "name"),
     [
-        "postgresql+asyncpg://u:p@db.supabase.co:5432/postgres",
-        "postgresql+asyncpg://u:p@localhost:5432/postgres",
-        "postgresql+asyncpg://u:p@10.0.0.5:54329/ampera_test",
+        ("mongodb+srv://u:p@cluster0.example.mongodb.net/", "ampera_test"),
+        ("mongodb://localhost:27018/", "ampera"),
+        ("mongodb://10.0.0.5:27018/", "ampera_test"),
     ],
 )
-def test_test_db_guard_rejects_non_local_or_non_test(url):
+def test_test_db_guard_rejects_non_local_or_non_test(uri, name):
     with pytest.raises(RuntimeError):
-        assert_safe_test_database(url)
+        assert_safe_test_database(uri, name)
 
 
 def test_test_db_guard_accepts_local_test_db():
-    assert_safe_test_database("postgresql+asyncpg://postgres:postgres@localhost:54329/ampera_test")
+    assert_safe_test_database("mongodb://localhost:27018/?directConnection=true", "ampera_test")
 
 
 async def _attempt_ip(db) -> str:
-    from sqlalchemy import select
-
-    from app.modules.auth.models import LoginAttempt
-
-    return (await db.execute(select(LoginAttempt.ip))).scalar_one()
+    doc = await db.login_attempts.find_one({})
+    return doc["ip"]
 
 
 async def test_forwarded_ip_used_only_from_trusted_proxy(monkeypatch, db):
@@ -58,12 +55,7 @@ async def test_forwarded_ip_used_only_from_trusted_proxy(monkeypatch, db):
         ) as c:
             assert (await c.post("/api/v1/auth/login", json=body)).status_code == 200
         ip = await _attempt_ip(db)
-        from sqlalchemy import delete
-
-        from app.modules.auth.models import LoginAttempt
-
-        await db.execute(delete(LoginAttempt))
-        await db.commit()
+        await db.login_attempts.delete_many({})
         return ip
 
     try:

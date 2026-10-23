@@ -1,17 +1,16 @@
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cookies import SESSION_COOKIE
-from app.core.db import get_db
+from app.core.db import Db, get_db
 from app.core.errors import Forbidden
 from app.modules.auth.models import User, UserRole
 from app.modules.auth.service import user_for_token
 
 __all__ = ["SESSION_COOKIE", "CurrentUser", "DbSession", "SuperAdmin", "client_ip"]
 
-DbSession = Annotated[AsyncSession, Depends(get_db)]
+DbSession = Annotated[Db, Depends(get_db)]
 
 
 def client_ip(request: Request) -> str:

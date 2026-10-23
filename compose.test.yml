@@ -1,16 +1,23 @@
-# Throwaway Postgres for the test suite. Never point tests at Supabase.
+# Throwaway MongoDB for the test suite (single-node replica set, so transactions work).
+# Never point tests at Atlas.
 services:
-  db:
-    image: postgres:17
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ampera_test
+  mongo:
+    image: mongo:9.0  # 8.x refuses to start on Linux kernel >= 6.19 (SERVER-121912)
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
     ports:
-      - "54329:5432"
+      - "27018:27018"
     tmpfs:
-      - /var/lib/postgresql/data
+      - /data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      # Initiates the replica set on first run, then reports healthy once this node is primary.
+      test:
+        - CMD
+        - mongosh
+        - --port
+        - "27018"
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27018'}]}).ok }; db.hello().isWritablePrimary || quit(1)"
       interval: 2s
-      timeout: 3s
-      retries: 15
+      timeout: 5s
+      retries: 30

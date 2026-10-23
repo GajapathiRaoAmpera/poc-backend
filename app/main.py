@@ -2,11 +2,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
-from sqlalchemy import text
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config import get_settings
-from app.core.db import engine
+from app.core.db import close_client, database, ensure_indexes
 from app.core.errors import install_error_handlers
 from app.core.origin import OriginCheckMiddleware
 from app.modules.auth.router import router as auth_router
@@ -19,16 +18,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        db = database()
+        await db.command("ping")
+        await ensure_indexes(db)
     except Exception as exc:
-        # Never print the URL itself: it contains the database password.
+        # Never print the URI itself: it contains the database password.
         raise SystemExit(
-            "Cannot connect to the database. Check DATABASE_URL "
-            "(Supabase: use the direct or session-pooler string, port 5432)."
+            "Cannot connect to MongoDB. Check MONGODB_URI, and in Atlas allow this machine's "
+            "IP under Network Access."
         ) from exc
     yield
-    await engine.dispose()
+    await close_client()
 
 
 def create_app() -> FastAPI:

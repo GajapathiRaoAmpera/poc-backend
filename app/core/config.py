@@ -7,7 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str
+    mongodb_uri: str
+    mongodb_db: str = "ampera"
     app_origin: str = "http://localhost:3000"
     # Fail closed: an unset ENVIRONMENT means production (Secure cookies, no reset links in logs).
     environment: Literal["development", "test", "production"] = "production"
