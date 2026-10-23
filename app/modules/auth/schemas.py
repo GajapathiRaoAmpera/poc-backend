@@ -40,6 +40,20 @@ class LoginIn(_Strict):
     password: Password
 
 
+class ResetRequestIn(_Strict):
+    email: Email
+
+
+class ResetConfirmIn(_Strict):
+    token: Annotated[str, Field(min_length=1, max_length=200)]
+    password: Password
+
+
+class ChangePasswordIn(_Strict):
+    current_password: Password
+    new_password: Password
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

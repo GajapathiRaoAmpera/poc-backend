@@ -5,7 +5,14 @@ from app.core.config import get_settings
 from app.core.deps import SESSION_COOKIE, CurrentUser, DbSession, client_ip
 from app.modules.auth import service
 from app.modules.auth.models import User
-from app.modules.auth.schemas import LoginIn, RegisterIn, UserOut
+from app.modules.auth.schemas import (
+    ChangePasswordIn,
+    LoginIn,
+    RegisterIn,
+    ResetConfirmIn,
+    ResetRequestIn,
+    UserOut,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -58,3 +65,21 @@ async def logout(request: Request, db: DbSession) -> Response:
 @router.get("/me", response_model=UserOut)
 async def me(user: CurrentUser) -> User:
     return user
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+async def password_reset_request(data: ResetRequestIn, db: DbSession) -> dict[str, str]:
+    await service.request_password_reset(db, data.email)
+    return {"status": "accepted"}
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def password_reset_confirm(data: ResetConfirmIn, db: DbSession) -> None:
+    await service.confirm_password_reset(db, data)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    data: ChangePasswordIn, request: Request, user: CurrentUser, db: DbSession
+) -> None:
+    await service.change_password(db, user, data, request.state.session_token_hash)
