@@ -39,3 +39,11 @@ docker compose -f compose.test.yml up -d --wait
 uv run pytest
 uv run ruff check .
 ```
+
+## Known limitations (Foundation release)
+
+- **Password reset email:** no email provider is configured. In `development` the reset link is
+  written to the server log; in other environments the request is accepted but nothing is sent.
+- **AI agents:** not part of this release; `daily_run_limit` is stored for later use.
+- **Login throttling** is per email + IP and stored in Postgres (`login_attempts`); old rows are
+  not pruned automatically yet.
