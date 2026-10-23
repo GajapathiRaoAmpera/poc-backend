@@ -100,6 +100,10 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("run_id", ASCENDING)], unique=True),
     ],
     "run_events": [IndexModel([("project_id", ASCENDING), ("seq", ASCENDING)], unique=True)],
+    "change_sets": [
+        IndexModel([("project_id", ASCENDING), ("created_at", DESCENDING)]),
+        IndexModel([("run_id", ASCENDING)], unique=True, sparse=True),
+    ],
     "approvals": [
         IndexModel([("project_id", ASCENDING), ("kind", ASCENDING), ("decided_at", DESCENDING)])
     ],
