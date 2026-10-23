@@ -126,3 +126,22 @@ async def test_login_updates_last_login(client, db):
     await login(client, "ana@x.com")
     me = (await client.get("/api/v1/auth/me")).json()
     assert me["last_login_at"] is not None
+
+
+async def test_rejected_session_cookie_is_cleared(client, db):
+    """A stale cookie must be removed, or the web app's redirect guard loops forever."""
+    await make_user(db, email="ana@x.com")
+    await login(client, "ana@x.com")
+    await db.execute(update(Session).values(expires_at=datetime.now(UTC) - timedelta(seconds=1)))
+    await db.commit()
+    r = await client.get("/api/v1/projects")
+    assert r.status_code == 401
+    set_cookie = r.headers.get("set-cookie", "")
+    assert "ampera_session=" in set_cookie
+    assert "max-age=0" in set_cookie.lower() or "expires=thu, 01 jan 1970" in set_cookie.lower()
+
+
+async def test_401_without_cookie_sets_no_cookie(client):
+    r = await client.get("/api/v1/projects")
+    assert r.status_code == 401
+    assert "set-cookie" not in r.headers

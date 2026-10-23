@@ -6,6 +6,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.cookies import SESSION_COOKIE
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,8 +70,13 @@ def error_response(status: int, code: str, message: str, details: Any = None) ->
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
-    async def _app_error(_: Request, exc: AppError) -> JSONResponse:
-        return error_response(exc.status, exc.code, exc.message, exc.details)
+    async def _app_error(request: Request, exc: AppError) -> JSONResponse:
+        response = error_response(exc.status, exc.code, exc.message, exc.details)
+        if exc.status == 401 and SESSION_COOKIE in request.cookies:
+            # Drop a stale/revoked cookie so clients don't keep presenting it
+            # (the web app's optimistic redirect would otherwise loop).
+            response.delete_cookie(SESSION_COOKIE, path="/")
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
