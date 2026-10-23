@@ -9,6 +9,7 @@ from app.core.db import engine
 from app.core.errors import install_error_handlers
 from app.core.origin import OriginCheckMiddleware
 from app.modules.auth.router import router as auth_router
+from app.modules.projects.router import router as projects_router
 from app.modules.users.router import router as users_router
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
 
     api.include_router(auth_router)
     api.include_router(users_router)
+    api.include_router(projects_router)
     app.include_router(api)
     return app
 
