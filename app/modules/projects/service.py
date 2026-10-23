@@ -3,13 +3,15 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import distinct_on
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFound
+from app.core.errors import Conflict, NotFound
 from app.core.pagination import _PageParams
 from app.modules.auth.models import User, UserRole
 from app.modules.projects.models import Project, ProjectSpecification, ProjectStatus
-from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate
+from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
+from app.modules.projects.spec_schema import ProjectSpecification as SpecData
 
 SPEC_SECTIONS = ("basics", "problem", "requirements", "constraints")
 
@@ -129,3 +131,55 @@ async def delete_project(db: AsyncSession, user: User, project_id: uuid.UUID) ->
     project = await get_project_for(db, user, project_id)
     await db.delete(project)
     await db.commit()
+
+
+def _spec_out(spec: ProjectSpecification | None) -> SpecOut:
+    if spec is None:
+        return SpecOut(revision=0, data={}, created_at=None, created_by=None)
+    return SpecOut(
+        revision=spec.revision,
+        data=spec.data,
+        created_at=spec.created_at,
+        created_by=spec.created_by,
+    )
+
+
+async def get_specification(db: AsyncSession, user: User, project_id: uuid.UUID) -> SpecOut:
+    project = await get_project_for(db, user, project_id)
+    return _spec_out((await latest_specs(db, [project.id])).get(project.id))
+
+
+async def save_specification(
+    db: AsyncSession, user: User, project_id: uuid.UUID, data: SpecData
+) -> SpecOut:
+    """Append revision n+1. Never updates an existing revision."""
+    project = await get_project_for(db, user, project_id)
+    payload = data.model_dump(mode="json", exclude_none=True)
+    new_name = data.basics.name if data.basics and data.basics.name else None
+
+    for attempt in range(2):
+        current = (
+            await db.execute(
+                select(func.coalesce(func.max(ProjectSpecification.revision), 0)).where(
+                    ProjectSpecification.project_id == project.id
+                )
+            )
+        ).scalar_one()
+        spec = ProjectSpecification(
+            project_id=project.id, revision=current + 1, data=payload, created_by=user.id
+        )
+        try:
+            async with db.begin_nested():
+                db.add(spec)
+        except IntegrityError as exc:
+            # A concurrent save took this revision number: retry once, then give up.
+            if attempt == 1:
+                raise Conflict("The specification was changed by another save. Reload.") from exc
+            continue
+        if new_name:
+            project.name = new_name
+        project.updated_at = func.now()
+        await db.commit()
+        await db.refresh(spec)
+        return _spec_out(spec)
+    raise AssertionError("unreachable")

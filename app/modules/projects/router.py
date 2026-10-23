@@ -6,7 +6,8 @@ from app.core.deps import CurrentUser, DbSession
 from app.core.pagination import Page, PageParams
 from app.modules.projects import service
 from app.modules.projects.models import ProjectStatus
-from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate
+from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
+from app.modules.projects.spec_schema import ProjectSpecification
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -44,3 +45,15 @@ async def update_project(
 async def delete_project(project_id: uuid.UUID, user: CurrentUser, db: DbSession) -> Response:
     await service.delete_project(db, user, project_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{project_id}/specification")
+async def get_specification(project_id: uuid.UUID, user: CurrentUser, db: DbSession) -> SpecOut:
+    return await service.get_specification(db, user, project_id)
+
+
+@router.put("/{project_id}/specification", status_code=status.HTTP_201_CREATED)
+async def save_specification(
+    project_id: uuid.UUID, data: ProjectSpecification, user: CurrentUser, db: DbSession
+) -> SpecOut:
+    return await service.save_specification(db, user, project_id, data)

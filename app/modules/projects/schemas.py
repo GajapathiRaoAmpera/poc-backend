@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, StringConstraints
 
@@ -31,3 +31,11 @@ class ProjectOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     completeness: float
+
+
+class SpecOut(BaseModel):
+    revision: int
+    # Stored JSON exactly as validated on save (None fields omitted).
+    data: dict[str, Any]
+    created_at: datetime | None
+    created_by: uuid.UUID | None
