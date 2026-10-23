@@ -4,8 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 from sqlalchemy import text
 
+from app.core.config import get_settings
 from app.core.db import engine
 from app.core.errors import install_error_handlers
+from app.core.origin import OriginCheckMiddleware
+from app.modules.auth.router import router as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,7 @@ async def lifespan(_: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Ampera Project Delivery API", version="0.1.0", lifespan=lifespan)
     install_error_handlers(app)
+    app.add_middleware(OriginCheckMiddleware, allowed_origin=get_settings().app_origin)
 
     api = APIRouter(prefix="/api/v1")
 
@@ -35,6 +39,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    api.include_router(auth_router)
     app.include_router(api)
     return app
 

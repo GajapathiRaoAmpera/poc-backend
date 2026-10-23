@@ -57,3 +57,21 @@ async def db():
 
     async with SessionLocal() as session:
         yield session
+
+
+@pytest.fixture
+async def make_client(app):
+    """Factory for extra independent clients (separate cookie jars)."""
+    clients = []
+
+    def _make(origin: str | None = APP_ORIGIN):
+        headers = {"Origin": origin} if origin else {}
+        c = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test", headers=headers
+        )
+        clients.append(c)
+        return c
+
+    yield _make
+    for c in clients:
+        await c.aclose()
