@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
 from sqlalchemy import text
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config import get_settings
 from app.core.db import engine
@@ -33,7 +34,11 @@ async def lifespan(_: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Ampera Project Delivery API", version="0.1.0", lifespan=lifespan)
     install_error_handlers(app)
-    app.add_middleware(OriginCheckMiddleware, allowed_origin=get_settings().app_origin)
+    settings = get_settings()
+    app.add_middleware(OriginCheckMiddleware, allowed_origin=settings.app_origin)
+    if settings.trusted_proxies:
+        # Real client IPs (login throttling, session records) when behind the Next.js proxy.
+        app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies)
 
     api = APIRouter(prefix="/api/v1")
 

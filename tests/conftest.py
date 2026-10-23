@@ -1,9 +1,15 @@
 import os
 
-os.environ["ENVIRONMENT"] = "test"
-os.environ.setdefault(
-    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:54329/ampera_test"
+from tests.safety import assert_safe_test_database
+
+# Never inherit DATABASE_URL from the shell: the suite truncates and drops tables.
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:54329/ampera_test"
 )
+assert_safe_test_database(TEST_DATABASE_URL)
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["ENVIRONMENT"] = "test"
+os.environ.pop("TRUSTED_PROXY_IPS", None)
 os.environ["APP_ORIGIN"] = "http://localhost:3000"
 
 import httpx  # noqa: E402

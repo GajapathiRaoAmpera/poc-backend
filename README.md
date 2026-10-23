@@ -17,7 +17,8 @@ Copy `.env.example` to `.env`:
 |---|---|
 | `DATABASE_URL` | `postgresql+asyncpg://…`. For Supabase use the **direct or session-pooler** string (port 5432); the transaction pooler (6543) is not supported. |
 | `APP_ORIGIN` | Origin of the web app, e.g. `http://localhost:3000`. Mutating requests from other origins are rejected. |
-| `ENVIRONMENT` | `development`, `test` or `production`. Cookies are `Secure` only in production. |
+| `ENVIRONMENT` | `development`, `test` or `production` (default when unset). Cookies are `Secure` and reset links are never logged outside development/test. |
+| `TRUSTED_PROXY_IPS` | Comma-separated IPs of reverse proxies allowed to set `X-Forwarded-For`. **Set this to the Next.js server's IP when it runs on a different host**, otherwise every user shares one IP for login throttling. |
 
 ## Run
 
@@ -32,7 +33,7 @@ uv run fastapi dev app/main.py
 
 ## Test
 
-Tests use a throwaway local Postgres and never touch Supabase.
+Tests use a throwaway local Postgres and never touch Supabase: they ignore `DATABASE_URL` and refuse to run unless `TEST_DATABASE_URL` (default `localhost:54329/ampera_test`) is a local database whose name ends in `_test`.
 
 ```bash
 docker compose -f compose.test.yml up -d --wait
