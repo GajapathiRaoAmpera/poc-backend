@@ -81,7 +81,7 @@ class Job(Document):
     run_after: datetime = Field(default_factory=now)
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
-    timeout_s: int = 180
+    timeout_s: float = 180
     last_error: str | None = None
     created_at: datetime = Field(default_factory=now)
 
