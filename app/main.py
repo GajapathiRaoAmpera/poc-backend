@@ -8,7 +8,11 @@ from app.core.config import get_settings
 from app.core.db import close_client, database, ensure_indexes
 from app.core.errors import install_error_handlers
 from app.core.origin import OriginCheckMiddleware
+from app.modules.agents import load_all
+from app.modules.artifacts.router import router as artifacts_router
 from app.modules.auth.router import router as auth_router
+from app.modules.changesets.router import router as changesets_router
+from app.modules.orchestration.router import router as workflow_router
 from app.modules.projects.router import router as projects_router
 from app.modules.users.router import router as users_router
 
@@ -32,6 +36,7 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
+    load_all()
     app = FastAPI(title="Ampera Project Delivery API", version="0.1.0", lifespan=lifespan)
     install_error_handlers(app)
     settings = get_settings()
@@ -49,6 +54,9 @@ def create_app() -> FastAPI:
     api.include_router(auth_router)
     api.include_router(users_router)
     api.include_router(projects_router)
+    api.include_router(workflow_router)
+    api.include_router(artifacts_router)
+    api.include_router(changesets_router)
     app.include_router(api)
     return app
 
