@@ -13,6 +13,9 @@ os.environ["MONGODB_DB"] = TEST_MONGODB_DB
 os.environ["ENVIRONMENT"] = "test"
 os.environ["APP_ORIGIN"] = "http://localhost:3000"
 os.environ.pop("TRUSTED_PROXY_IPS", None)
+# Tests never call a real model provider.
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ.pop("GROQ_API_KEY", None)
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402

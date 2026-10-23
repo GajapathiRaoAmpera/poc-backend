@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,13 @@ class Settings(BaseSettings):
     # Comma-separated IPs of reverse proxies (e.g. the Next.js server) allowed to set
     # X-Forwarded-For. Empty = trust nobody; client IP is the TCP peer.
     trusted_proxy_ips: str = ""
+
+    # LLM provider (agents). "mock" is for tests/offline demos and refused in production.
+    llm_provider: Literal["groq", "mock"] = "groq"
+    groq_api_key: SecretStr | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    platform_daily_run_limit: int = 50
+    agent_timeout_s: int = 180
 
     @property
     def trusted_proxies(self) -> list[str]:
