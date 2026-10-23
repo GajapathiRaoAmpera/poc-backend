@@ -77,6 +77,16 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("project_id", ASCENDING), ("revision", ASCENDING)], unique=True)
     ],
     "audit_logs": [IndexModel([("created_at", DESCENDING)])],
+    "artifacts": [IndexModel([("project_id", ASCENDING), ("kind", ASCENDING)], unique=True)],
+    "artifact_revisions": [
+        IndexModel([("artifact_id", ASCENDING), ("revision", ASCENDING)], unique=True),
+        IndexModel([("project_id", ASCENDING), ("kind", ASCENDING), ("revision", DESCENDING)]),
+        # Idempotent agent writes: one revision per run (absent for user edits).
+        IndexModel([("run_id", ASCENDING)], unique=True, sparse=True),
+    ],
+    "approvals": [
+        IndexModel([("project_id", ASCENDING), ("kind", ASCENDING), ("decided_at", DESCENDING)])
+    ],
 }
 
 

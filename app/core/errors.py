@@ -97,3 +97,33 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled error", exc_info=exc)
         return error_response(500, "INTERNAL", "Something went wrong")
+
+
+class RevisionConflict(AppError):
+    def __init__(self, latest_revision: int) -> None:
+        super().__init__(
+            "REVISION_CONFLICT",
+            "This was changed since you loaded it. Reload to see the latest revision.",
+            409,
+            {"latest_revision": latest_revision},
+        )
+
+
+class NotApprovable(AppError):
+    def __init__(self, reasons: list[str]) -> None:
+        super().__init__("NOT_APPROVABLE", reasons[0], 409, {"reasons": reasons})
+
+
+class StageBlocked(AppError):
+    def __init__(self, reasons: list[str]) -> None:
+        super().__init__("STAGE_BLOCKED", reasons[0], 409, {"reasons": reasons})
+
+
+class QuotaExceeded(AppError):
+    def __init__(self, limit: int) -> None:
+        super().__init__(
+            "QUOTA_EXCEEDED",
+            f"Daily limit of {limit} agent runs reached. Try again later or ask a Super Admin.",
+            429,
+            {"limit": limit},
+        )
