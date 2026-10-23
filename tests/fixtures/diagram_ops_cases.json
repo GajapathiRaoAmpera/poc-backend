@@ -1,0 +1,62 @@
+{
+  "base": {
+    "schema_version": "1.0",
+    "diagram_type": "system",
+    "nodes": [
+      {"id": "n_web", "type": "frontend", "label": "Web app", "description": "", "technology": "Next.js",
+       "responsibilities": [], "config": {}, "requirement_ids": ["FR-001"], "position": {"x": 0, "y": 0}, "group": null},
+      {"id": "n_api", "type": "backend", "label": "API", "description": "", "technology": "FastAPI",
+       "responsibilities": [], "config": {}, "requirement_ids": [], "position": {"x": 300, "y": 0}, "group": null},
+      {"id": "n_worker", "type": "worker", "label": "Worker", "description": "", "technology": "Python",
+       "responsibilities": [], "config": {}, "requirement_ids": [], "position": {"x": 600, "y": 0}, "group": null}
+    ],
+    "edges": [
+      {"id": "e_web_api", "source": "n_web", "target": "n_api", "label": "REST", "protocol": "HTTPS", "data": null, "requirement_ids": []},
+      {"id": "e_api_worker", "source": "n_api", "target": "n_worker", "label": "jobs", "protocol": null, "data": null, "requirement_ids": []}
+    ],
+    "groups": [],
+    "decisions": [],
+    "notes": [],
+    "viewport": {"x": 0, "y": 0, "zoom": 1}
+  },
+  "cases": [
+    {
+      "name": "insert redis between api and worker",
+      "ops": [
+        {"op": "add_node", "node": {"id": "n_redis", "type": "cache", "label": "Redis", "description": "Queue broker",
+          "technology": "Redis 7", "responsibilities": [], "config": {}, "requirement_ids": [], "position": {"x": 450, "y": 120}, "group": null}},
+        {"op": "remove_edge", "id": "e_api_worker"},
+        {"op": "add_edge", "edge": {"id": "e_api_redis", "source": "n_api", "target": "n_redis", "label": "enqueue", "protocol": "RESP", "data": null, "requirement_ids": []}},
+        {"op": "add_edge", "edge": {"id": "e_redis_worker", "source": "n_redis", "target": "n_worker", "label": "consume", "protocol": "RESP", "data": null, "requirement_ids": []}}
+      ],
+      "expect": {"node_ids": ["n_web", "n_api", "n_worker", "n_redis"], "edge_ids": ["e_web_api", "e_api_redis", "e_redis_worker"]}
+    },
+    {
+      "name": "remove node removes attached edges",
+      "ops": [{"op": "remove_node", "id": "n_api"}],
+      "expect": {"node_ids": ["n_web", "n_worker"], "edge_ids": []}
+    },
+    {
+      "name": "update node fields",
+      "ops": [{"op": "update_node", "id": "n_api", "fields": {"label": "Core API", "technology": "FastAPI 0.120"}}],
+      "expect": {"node_ids": ["n_web", "n_api", "n_worker"], "edge_ids": ["e_web_api", "e_api_worker"],
+                 "node": {"id": "n_api", "label": "Core API", "technology": "FastAPI 0.120"}}
+    },
+    {
+      "name": "unknown node id is an error",
+      "ops": [{"op": "update_node", "id": "n_missing", "fields": {"label": "x"}}],
+      "error": {"index": 0, "contains": "n_missing"}
+    },
+    {
+      "name": "duplicate node id is an error",
+      "ops": [{"op": "add_node", "node": {"id": "n_api", "type": "service", "label": "Dup", "description": "", "technology": "",
+               "responsibilities": [], "config": {}, "requirement_ids": [], "position": {"x": 0, "y": 0}, "group": null}}],
+      "error": {"index": 0, "contains": "already exists"}
+    },
+    {
+      "name": "edge to unknown node is an error",
+      "ops": [{"op": "add_edge", "edge": {"id": "e_bad", "source": "n_api", "target": "n_nope", "label": "", "protocol": null, "data": null, "requirement_ids": []}}],
+      "error": {"index": 0, "contains": "n_nope"}
+    }
+  ]
+}
