@@ -169,6 +169,13 @@ async def retry_run(db: Db, project: Project, run_id: uuid.UUID, user: User) -> 
     old = await _get(db, project, run_id)
     if old.status not in (RunStatus.FAILED, RunStatus.CANCELLED):
         raise Conflict("Only failed or cancelled runs can be retried")
+    if old.graph_key:
+        # Runs the delivery graph started are retried by resuming the graph, which re-runs the
+        # step; some (the orchestrator) have no standalone agent to run outside it.
+        from app.modules.delivery import service as delivery
+
+        await delivery.resume(db, project, user)
+        return old
     blockers = await dependency_blockers(db, project, old.stage)
     if blockers:
         raise StageBlocked(blockers)

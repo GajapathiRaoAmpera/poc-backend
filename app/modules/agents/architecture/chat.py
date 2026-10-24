@@ -42,7 +42,7 @@ class ArchitectureChatOutput(BaseModel):
 
 def chat_prompt(reqs: dict, current: dict | None, history, instruction: str) -> str:
     return (
-        f"<approved_requirements>\n{json.dumps(reqs, indent=1)[:30000]}\n"
+        f"<approved_requirements>\n{json.dumps(reqs, separators=(',', ':'))[:30000]}\n"
         f"</approved_requirements>\n\n<current_architecture>\n"
         f"{json.dumps(current) if current else ''}\n</current_architecture>\n\n"
         f"{conversation_block(history)}\n\n<instruction>\n{instruction[:4000]}\n</instruction>"

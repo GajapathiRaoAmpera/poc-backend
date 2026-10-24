@@ -15,7 +15,11 @@ def build_provider(settings: Settings) -> LLMProvider:
         return MockProvider()
     if settings.groq_api_key is None or not settings.groq_api_key.get_secret_value():
         raise RuntimeError("GROQ_API_KEY is required when LLM_PROVIDER=groq")
-    return GroqProvider(settings.groq_api_key.get_secret_value(), settings.groq_model)
+    return GroqProvider(
+        settings.groq_api_key.get_secret_value(),
+        settings.groq_model,
+        max_input_tokens=settings.groq_max_input_tokens,
+    )
 
 
 @lru_cache

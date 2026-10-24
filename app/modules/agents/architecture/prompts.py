@@ -32,7 +32,7 @@ Return only the JSON object described by the schema."""
 
 def generate_prompt(requirements: dict, direction: str | None = None) -> str:
     prompt = (
-        f"<approved_requirements>\n{json.dumps(requirements, indent=1)[:60000]}\n"
+        f"<approved_requirements>\n{json.dumps(requirements, separators=(',', ':'))[:60000]}\n"
         "</approved_requirements>\n\n"
     )
     if direction:
@@ -42,7 +42,7 @@ def generate_prompt(requirements: dict, direction: str | None = None) -> str:
 
 def change_prompt(requirements: dict, current: dict, instruction: str) -> str:
     return (
-        f"<approved_requirements>\n{json.dumps(requirements, indent=1)[:40000]}\n"
+        f"<approved_requirements>\n{json.dumps(requirements, separators=(',', ':'))[:40000]}\n"
         f"</approved_requirements>\n\n<current_architecture>\n{json.dumps(current)[:60000]}\n"
         f"</current_architecture>\n\n<instruction>\n{instruction[:2000]}\n</instruction>"
     )

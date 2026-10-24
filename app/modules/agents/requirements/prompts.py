@@ -24,12 +24,12 @@ Return only the JSON object described by the schema."""
 def user_prompt(
     spec: dict, previous: dict | None, retired: set[str], direction: str | None = None
 ) -> str:
-    parts = [f"<project_data>\n{json.dumps(spec, indent=1)[:40000]}\n</project_data>"]
+    parts = [f"<project_data>\n{json.dumps(spec, separators=(',', ':'))[:40000]}\n</project_data>"]
     if direction:
         parts.append(f"<user_direction>\n{direction[:2000]}\n</user_direction>")
     if previous is not None:
         parts.append(
-            f"<previous_requirements>\n{json.dumps(previous, indent=1)[:40000]}\n"
+            f"<previous_requirements>\n{json.dumps(previous, separators=(',', ':'))[:40000]}\n"
             "</previous_requirements>"
         )
         parts.append(f"<retired_ids>{', '.join(sorted(retired)) or 'none'}</retired_ids>")

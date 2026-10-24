@@ -22,10 +22,26 @@ def _pydantic_issues(exc: ValidationError) -> list[ValidationIssue]:
     ]
 
 
-def _repair_prompt(user: str, previous: dict, issues: list[ValidationIssue]) -> str:
+MAX_PREVIOUS_CHARS = 30000
+# Characters per token used to keep a repair prompt inside the provider's input limit.
+CHARS_PER_TOKEN = 4.5
+_REPAIR_OVERHEAD = 1500  # tags, instructions and the listed errors
+
+
+def _previous_budget(ctx: AgentContext, system: str, schema: dict, user: str) -> int:
+    limit = getattr(ctx.provider, "max_input_tokens", None)
+    if not limit:
+        return MAX_PREVIOUS_CHARS
+    room = int(limit * CHARS_PER_TOKEN) - len(system) - len(json.dumps(schema)) - len(user)
+    return max(0, min(MAX_PREVIOUS_CHARS, room - _REPAIR_OVERHEAD))
+
+
+def _repair_prompt(
+    user: str, previous: dict, issues: list[ValidationIssue], budget: int = MAX_PREVIOUS_CHARS
+) -> str:
     listed = "\n".join(f"- {i.message}" for i in issues[:20])
     return (
-        f"{user}\n\n<previous_output>\n{json.dumps(previous)[:30000]}\n</previous_output>\n"
+        f"{user}\n\n<previous_output>\n{json.dumps(previous)[:budget]}\n</previous_output>\n"
         f"<validation_errors>\n{listed}\n</validation_errors>\n"
         "Your previous output failed validation. Return a corrected JSON object that fixes every "
         "listed error and keeps everything else unchanged."
@@ -78,5 +94,6 @@ async def call_structured[T: BaseModel](
             f"Output failed validation: {issues[0].message} — {tail}",
             {"issues": [i.model_dump() for i in issues[:10]]},
         )
-        prompt = _repair_prompt(user, result.data, issues)
+        budget = _previous_budget(ctx, system, schema, user)
+        prompt = _repair_prompt(user, result.data, issues, budget)
     raise OutputInvalid([i.model_dump() for i in issues])

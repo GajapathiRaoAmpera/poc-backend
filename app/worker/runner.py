@@ -45,6 +45,15 @@ def backoff_seconds(attempt: int) -> float:
     return BACKOFF_BASE_S * 2**attempt * random.uniform(0.8, 1.2)  # noqa: S311 (jitter, not crypto)
 
 
+# Provider rate limits are per minute: retrying sooner only spends another attempt.
+RATE_LIMIT_WAIT_S = 60
+
+
+def retry_delay(code: str | None, attempt: int) -> float:
+    delay = backoff_seconds(attempt)
+    return max(delay, RATE_LIMIT_WAIT_S * random.uniform(1.0, 1.2)) if code == "RATE_LIMITED" else delay  # noqa: S311
+
+
 class Worker:
     def __init__(
         self,
@@ -191,7 +200,13 @@ class Worker:
             emit=emit,
             cancelled=lambda: cancel_flag["set"],
         )
-        agent_task = asyncio.ensure_future(get_agent(run.agent)(ctx))
+        try:
+            agent_fn = get_agent(run.agent)
+        except KeyError:
+            logger.error("No agent %r registered for run %s", run.agent, run.id)
+            await self._fail(job, run, project, "INTERNAL", "This agent can't run on its own")
+            return True
+        agent_task = asyncio.ensure_future(agent_fn(ctx))
         heartbeat = asyncio.create_task(self._heartbeat(job, run, agent_task, cancel_flag))
         try:
             outcome: AgentOutcome = await asyncio.wait_for(

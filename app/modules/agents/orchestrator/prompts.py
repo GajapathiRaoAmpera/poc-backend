@@ -32,21 +32,36 @@ Rules:
 Return only the JSON object described by the schema."""
 
 
+# Sized for an 8000-token request limit next to a ~2900-token system prompt + schema.
+TRANSCRIPT_CHARS = 9000
+BRIEF_CHARS = 8000
+_COMPACT = {"separators": (",", ":"), "default": str}
+
+
+def _conversation(transcript: list[tuple[str, str]]) -> str:
+    """Newest messages first into the budget; answers already live in the brief."""
+    kept: list[str] = []
+    used = 0
+    for who, text in reversed(transcript):
+        limit = 2000 if who == "client" else 800
+        item = f'<message from="{who}">\n{text[:limit]}\n</message>'
+        if used + len(item) > TRANSCRIPT_CHARS:
+            break
+        kept.append(item)
+        used += len(item)
+    return "\n".join(reversed(kept)) or "(none)"
+
+
 def user_prompt(
     digest: str,
     transcript: list[tuple[str, str]],
     brief: dict | None,
     preferences: dict | None,
 ) -> str:
-    # Bounded for free-tier token limits: answers already live in the brief, turns are for context.
-    messages = "\n".join(
-        f'<message from="{who}">\n{text[: 4000 if who == "client" else 1500]}\n</message>'
-        for who, text in transcript[-24:]
-    )
     parts = [
-        f"<intake_conversation>\n{messages or '(none)'}\n</intake_conversation>",
-        f"<current_brief>\n{json.dumps(brief or {}, indent=1)[:20000]}\n</current_brief>",
-        f"<preferences>\n{json.dumps(preferences or {}, default=str)[:4000]}\n</preferences>",
+        f"<intake_conversation>\n{_conversation(transcript)}\n</intake_conversation>",
+        f"<current_brief>\n{json.dumps(brief or {}, **_COMPACT)[:BRIEF_CHARS]}\n</current_brief>",
+        f"<preferences>\n{json.dumps(preferences or {}, **_COMPACT)[:2000]}\n</preferences>",
         f"<delivery_state>\n{digest}\n</delivery_state>",
         "Produce the delivery plan for this project now.",
     ]

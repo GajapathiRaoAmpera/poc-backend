@@ -174,3 +174,22 @@ async def test_manual_brief_edit_is_kept_and_does_not_replan(owner_client, db, w
     assert spec["data"] == edited  # the user's brief was not rewritten
     runs = [r async for r in db.agent_runs.find({"stage": "requirements"}).sort("created_at", 1)]
     assert [r["mode"] for r in runs] == ["generate", "revise"]  # stale requirements redone
+
+
+async def test_retrying_a_failed_graph_run_resumes_the_workflow(owner_client, db, work_with):
+    from app.llm.base import ProviderError
+
+    pid = (await _intake(owner_client))["project"]["id"]
+    too_large = ProviderError("TOO_LARGE", "too large", retryable=False)
+    await work_with(scripted(orchestrator_output=too_large))
+    failed = await db.agent_runs.find_one({"agent": "project_orchestrator", "status": "FAILED"})
+    assert failed is not None
+
+    r = await owner_client.post(f"{API}/projects/{pid}/runs/{failed['_id']}/retry")
+    assert r.status_code == 202, r.text
+    # No classic run for a graph-only agent: the delivery graph re-runs it instead.
+    assert await db.agent_runs.count_documents({"agent": "project_orchestrator"}) == 1
+    assert await db.jobs.count_documents({"type": "graph_step", "status": "QUEUED"}) == 1
+    await work_with(NO_QUESTIONS)
+    d = (await owner_client.get(f"{API}/projects/{pid}/delivery")).json()
+    assert d["status"] == "PAUSED" and d["pending"]["kind"] == "approval"

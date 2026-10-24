@@ -38,7 +38,7 @@ class RequirementsChatOutput(BaseModel):
 
 def chat_prompt(current: dict | None, history, instruction: str) -> str:
     return (
-        f"<current_requirements>\n{json.dumps(current or {}, indent=1)[:30000]}\n"
+        f"<current_requirements>\n{json.dumps(current or {}, separators=(',', ':'))[:30000]}\n"
         f"</current_requirements>\n\n{conversation_block(history)}\n\n"
         f"<instruction>\n{instruction[:4000]}\n</instruction>"
     )

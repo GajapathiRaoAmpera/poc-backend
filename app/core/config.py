@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     llm_provider: Literal["groq", "mock"] = "groq"
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-120b"
+    # Groq's per-request cap equals the account's tokens-per-minute limit (free tier: 8000).
+    groq_max_input_tokens: int | None = 8000
     platform_daily_run_limit: int = 50
     agent_timeout_s: int = 180
 

@@ -102,3 +102,39 @@ async def test_key_never_in_error_message():
     with pytest.raises(ProviderError) as e:
         await _call(p)
     assert "secret-key-123" not in str(e.value) and "secret-key-123" not in e.value.message
+
+
+async def test_groq_413_is_a_clear_non_retryable_too_large():
+    p = _provider(lambda req: httpx.Response(413, json={"error": {"message": "org_123 TPM"}}))
+    with pytest.raises(ProviderError) as e:
+        await _call(p)
+    assert (e.value.code, e.value.retryable) == ("TOO_LARGE", False)
+    assert "token limit" in e.value.message and "org_123" not in e.value.message
+
+
+async def test_groq_refuses_oversized_prompt_without_calling():
+    def handler(req):
+        raise AssertionError("must not send an oversized request")
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    p = GroqProvider(api_key="k", model="m", http=http, max_input_tokens=1000)
+    with pytest.raises(ProviderError) as e:
+        await p.generate(
+            system="sys",
+            user="x" * 8000,
+            schema=SCHEMA,
+            schema_name="thing",
+            max_output_tokens=500,
+            timeout_s=5,
+        )
+    assert (e.value.code, e.value.retryable) == ("TOO_LARGE", False)
+    assert "1,000" in e.value.message
+
+
+async def test_groq_413_on_a_prompt_that_fits_is_a_retryable_rate_limit():
+    # Groq answers 413 when the shared per-minute budget is partly used by other calls.
+    http = httpx.AsyncClient(transport=httpx.MockTransport(lambda req: httpx.Response(413)))
+    p = GroqProvider(api_key="k", model="m", http=http, max_input_tokens=8000)
+    with pytest.raises(ProviderError) as e:
+        await _call(p)
+    assert (e.value.code, e.value.retryable) == ("RATE_LIMITED", True)

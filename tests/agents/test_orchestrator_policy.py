@@ -159,3 +159,14 @@ def test_limit_questions_stops_asking_after_three_answered_rounds():
     f = facts()
     f.answered_rounds = 3
     assert limit_questions(plan(missing_info=_qs(2, True)), f).missing_info == []
+
+
+def test_orchestrator_prompt_stays_within_free_tier_budget():
+    from app.modules.agents.orchestrator import prompts
+
+    transcript = [("client" if i % 2 else "orchestrator", "x" * 3000) for i in range(60)]
+    transcript.append(("client", "latest answer"))
+    brief = {"problem": {"business_problem": "y" * 20000}}
+    user = prompts.user_prompt("digest", transcript, brief, {})
+    assert len(user) <= prompts.TRANSCRIPT_CHARS + prompts.BRIEF_CHARS + 6000
+    assert "latest answer" in user and "\n " not in user.split("<current_brief>")[1][:200]

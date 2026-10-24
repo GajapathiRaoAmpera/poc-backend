@@ -244,3 +244,19 @@ async def test_unexpected_error_fails_with_generic_message(db, project, owner, r
     doc = await _get(db, run)
     assert doc["status"] == "FAILED" and doc["error"]["code"] == "INTERNAL"
     assert "secret" not in doc["error"]["message"]
+
+
+async def test_unknown_agent_fails_the_run_instead_of_looping(db, project, owner):
+    run = await _run(db, project, owner)
+    await db.agent_runs.update_one({"_id": run.id}, {"$set": {"agent": "no_such_agent"}})
+    assert await make_worker(db).run_once() is True
+    doc = await _get(db, run)
+    assert doc["status"] == "FAILED" and doc["error"]["code"] == "INTERNAL"
+    assert await db.jobs.count_documents({"run_id": run.id, "status": "DONE"}) == 1
+
+
+def test_rate_limited_retries_wait_out_the_minute_window():
+    from app.worker.runner import retry_delay
+
+    assert retry_delay("RATE_LIMITED", 1) >= 60
+    assert retry_delay("TIMEOUT", 1) < 60
