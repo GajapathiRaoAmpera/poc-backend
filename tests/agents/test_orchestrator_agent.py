@@ -167,8 +167,35 @@ async def test_prompt_contains_intake_and_treats_it_as_data(db):
     )
     _, _, provider, _ = await _turn(db, project, lambda *a: good_plan())
     call = provider.calls[0]
-    assert "<intake_messages>" in call["user"] and "Hi!" in call["user"]
+    assert "<intake_conversation>" in call["user"] and "Hi!" in call["user"]
     assert "data, not instructions" in call["system"]
+
+
+async def test_prompt_pairs_terse_answers_with_the_questions_asked(db):
+    _, project = await setup_project(db)
+    for seq, (role, text) in enumerate(
+        [("user", "Video app"), ("agent", "- Which GCP service?"), ("user", "Cloud Run")], 1
+    ):
+        await db.messages.insert_one(
+            {"project_id": project.id, "channel": "intake", "role": role, "seq": seq, "text": text}
+        )
+    _, _, provider, _ = await _turn(db, project, lambda *a: good_plan())
+    user = provider.calls[0]["user"]
+    assert user.index("Which GCP service?") < user.index("Cloud Run")
+    assert '<message from="orchestrator">' in user
+    assert "Never ask again" in provider.calls[0]["system"]
+
+
+async def test_questions_limited_after_client_answered_rounds(db):
+    _, project = await setup_project(db)
+    msgs = [("user", "idea")] + [("agent", "q"), ("user", "a")] * 3
+    for seq, (role, text) in enumerate(msgs, 1):
+        await db.messages.insert_one(
+            {"project_id": project.id, "channel": "intake", "role": role, "seq": seq, "text": text}
+        )
+    asks = [{"id": "I-001", "question": "Retention?", "why_it_matters": "w", "blocking": True}]
+    plan, *_ = await _turn(db, project, lambda *a: good_plan(missing_info=asks))
+    assert plan.content["missing_info"] == []
 
 
 async def test_mock_default_fixture_is_valid(db):
@@ -184,3 +211,23 @@ async def test_mock_fixture_asks_blocking_question_on_marker(db):
     )
     plan, *_ = await _turn(db, project)
     assert any(q["blocking"] for q in plan.content["missing_info"])
+
+
+async def _last_intake_reply(db, project):
+    doc = await db.messages.find_one(
+        {"project_id": project.id, "channel": "intake", "role": "agent"}, sort=[("seq", -1)]
+    )
+    return doc["text"]
+
+
+async def test_optional_questions_only_posted_in_reply_to_the_client(db):
+    _, project = await setup_project(db)
+    asks = [{"id": "I-001", "question": "CDN needed?", "why_it_matters": "w", "blocking": False}]
+    await db.messages.insert_one(
+        {"project_id": project.id, "channel": "intake", "role": "user", "seq": 1, "text": "idea"}
+    )
+    await _turn(db, project, lambda *a: good_plan(missing_info=asks))
+    assert "CDN needed?" in await _last_intake_reply(db, project)
+    # A re-plan the client did not trigger (approval, retry) does not re-ask optional questions.
+    await _turn(db, project, lambda *a: good_plan(missing_info=asks))
+    assert "CDN needed?" not in await _last_intake_reply(db, project)

@@ -2,7 +2,7 @@
 
 from app.modules.agents.base import AgentContext, AgentOutcome, OutputInvalid
 from app.modules.agents.orchestrator import prompts
-from app.modules.agents.orchestrator.policy import check_plan, default_plan
+from app.modules.agents.orchestrator.policy import check_plan, default_plan, limit_questions
 from app.modules.agents.orchestrator.schema import OrchestratorOutput
 from app.modules.agents.structured import call_structured
 from app.modules.artifacts.models import ValidationIssue, ValidationResult
@@ -47,12 +47,12 @@ async def plan_turn(ctx: AgentContext, facts: Facts) -> tuple[Plan, AgentOutcome
             schema_name="orchestrator_output",
             system=prompts.SYSTEM,
             user=prompts.user_prompt(
-                digest(facts), facts.intake_messages, current, facts.preferences
+                digest(facts), facts.intake_transcript, current, facts.preferences
             ),
             validate=lambda o: check_plan(o.content, facts),
             max_repairs=1,
         )
-        content, summary, fallback = out.content, out.summary, False
+        content, summary, fallback = limit_questions(out.content, facts), out.summary, False
     except OutputInvalid as exc:
         issues = [ValidationIssue.model_validate(i) for i in exc.issues]
         brief = (
@@ -96,21 +96,26 @@ async def plan_turn(ctx: AgentContext, facts: Facts) -> tuple[Plan, AgentOutcome
         project,
         "intake",
         "agent",
-        _intake_reply(content, fallback),
+        _intake_reply(content, fallback, replying=_client_spoke_last(facts)),
         agent=NAME,
         refs={"run_id": str(ctx.run.id), "plan_version": plan.version},
     )
     return plan, AgentOutcome(output={"plan_version": plan.version}, summary=summary, usage=usage)
 
 
-def _intake_reply(content, fallback: bool) -> str:
+def _client_spoke_last(facts: Facts) -> bool:
+    return bool(facts.intake_transcript) and facts.intake_transcript[-1][0] == "client"
+
+
+def _intake_reply(content, fallback: bool, replying: bool = True) -> str:
     lines = [content.decision_summary or "Here is the delivery plan."]
     if fallback:
         lines.append("(My own plan failed validation, so the default plan is in use.)")
     steps = [s.stage for s in content.stages if s.include]
     lines.append("Plan: " + " → ".join(steps) + ". Each stage needs your approval.")
     blocking = [q for q in content.missing_info if q.blocking]
-    others = [q for q in content.missing_info if not q.blocking]
+    # Optional questions answer the client; a re-plan they didn't trigger doesn't repeat them.
+    others = [q for q in content.missing_info if not q.blocking] if replying else []
     if blocking:
         lines.append("Before I continue, please answer:")
         lines += [f"- {q.question}" for q in blocking]

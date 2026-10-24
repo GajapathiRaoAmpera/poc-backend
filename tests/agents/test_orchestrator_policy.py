@@ -2,7 +2,12 @@ import uuid
 
 import pytest
 
-from app.modules.agents.orchestrator.policy import check_plan, default_plan
+from app.modules.agents.orchestrator.policy import (
+    MAX_QUESTIONS_PER_TURN,
+    check_plan,
+    default_plan,
+    limit_questions,
+)
 from app.modules.agents.orchestrator.schema import PlanContent
 from app.modules.delivery.facts import Facts, StageFacts
 
@@ -127,3 +132,30 @@ def test_default_plan_includes_all_implemented_with_approval():
     assert set(included) == {"requirements", "architecture"}
     assert all(s.approval_required for s in included.values())
     assert p.next_stage == "requirements"
+
+
+def _qs(n, blocking):
+    return [
+        {"id": f"I-{i:03d}", "question": f"q{i}", "why_it_matters": "w", "blocking": blocking}
+        for i in range(1, n + 1)
+    ]
+
+
+def test_limit_questions_caps_per_turn_blocking_first():
+    p = plan(missing_info=_qs(5, False) + [{**_qs(1, True)[0], "id": "I-009"}])
+    out = limit_questions(p, facts())
+    assert len(out.missing_info) == MAX_QUESTIONS_PER_TURN
+    assert out.missing_info[0].id == "I-009" and out.missing_info[0].blocking
+
+
+def test_limit_questions_no_blocking_after_two_answered_rounds():
+    f = facts()
+    f.answered_rounds = 2
+    out = limit_questions(plan(missing_info=_qs(2, True)), f)
+    assert [q.blocking for q in out.missing_info] == [False, False]
+
+
+def test_limit_questions_stops_asking_after_three_answered_rounds():
+    f = facts()
+    f.answered_rounds = 3
+    assert limit_questions(plan(missing_info=_qs(2, True)), f).missing_info == []

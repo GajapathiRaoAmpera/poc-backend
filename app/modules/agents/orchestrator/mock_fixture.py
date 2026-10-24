@@ -13,10 +13,9 @@ def _block(text: str, tag: str) -> str:
 
 
 def orchestrator_output(system: str, user: str) -> dict:
-    messages = [
-        line[2:] for line in _block(user, "intake_messages").splitlines() if line.startswith("- ")
-    ]
-    messages = [m for m in messages if m != "(none)"]
+    messages = re.findall(
+        r'<message from="client">\n(.*?)\n</message>', _block(user, "intake_conversation"), re.S
+    )
     brief = json.loads(_block(user, "current_brief") or "{}")
     if not brief.get("basics") and messages:
         idea = messages[0]

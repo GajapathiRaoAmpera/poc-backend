@@ -102,3 +102,45 @@ async def test_answered_since_agent(db):
     answered = good_requirements()["content"]["open_questions"][0] | {"answer": "Azure AD"}
     await _req_revision(db, project, owner, open_questions=[answered])
     assert (await collect_facts(db, project)).stages["requirements"].answered_since_agent is False
+
+
+async def _intake(db, project, *msgs):
+    for seq, (role, text) in enumerate(msgs, 1):
+        await db.messages.insert_one(
+            {"project_id": project.id, "channel": "intake", "role": role, "seq": seq, "text": text}
+        )
+
+
+async def test_intake_transcript_keeps_orchestrator_questions_in_order(db):
+    _, project = await setup_project(db)
+    await _intake(
+        db,
+        project,
+        ("user", "Build a video app"),
+        ("agent", "Before I continue, please answer:\n- Which hosting?"),
+        ("system", "Delivery workflow failed: HTTP 429"),
+        ("user", "Cloud Run"),
+    )
+    f = await collect_facts(db, project)
+    assert f.intake_transcript == [
+        ("client", "Build a video app"),
+        ("orchestrator", "Before I continue, please answer:\n- Which hosting?"),
+        ("client", "Cloud Run"),
+    ]
+    assert f.intake_messages == ["Build a video app", "Cloud Run"]
+
+
+async def test_answered_rounds_counts_replies_to_orchestrator_turns(db):
+    _, project = await setup_project(db)
+    await _intake(
+        db,
+        project,
+        ("user", "idea"),
+        ("agent", "q1"),
+        ("user", "a1"),
+        ("user", "a1 more"),
+        ("agent", "q2"),
+        ("user", "a2"),
+        ("agent", "q3"),
+    )
+    assert (await collect_facts(db, project)).answered_rounds == 2

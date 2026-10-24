@@ -15,6 +15,10 @@ DEPENDS_ON = {
     "code": ["architecture"],
 }
 MAX_QUESTIONS = 7
+# What actually reaches the client per turn, and how many answered rounds before it must proceed.
+MAX_QUESTIONS_PER_TURN = 3
+NO_BLOCKING_AFTER_ROUNDS = 2
+NO_QUESTIONS_AFTER_ROUNDS = 3
 
 
 def _err(code: str, message: str) -> ValidationIssue:
@@ -69,6 +73,20 @@ def check_plan(plan: PlanContent, facts: Facts) -> list[ValidationIssue]:
     if len(plan.missing_info) > MAX_QUESTIONS:
         out.append(_err("TOO_MANY_QUESTIONS", f"Ask at most {MAX_QUESTIONS} questions per turn"))
     return out
+
+
+def limit_questions(plan: PlanContent, facts: Facts) -> PlanContent:
+    """Bound the questions asked, so intake converges instead of interrogating the client."""
+    if facts.answered_rounds >= NO_QUESTIONS_AFTER_ROUNDS:
+        questions = []
+    else:
+        ordered = sorted(plan.missing_info, key=lambda q: not q.blocking)
+        questions = ordered[:MAX_QUESTIONS_PER_TURN]
+        if facts.answered_rounds >= NO_BLOCKING_AFTER_ROUNDS:
+            questions = [q.model_copy(update={"blocking": False}) for q in questions]
+    if questions == plan.missing_info:
+        return plan
+    return plan.model_copy(update={"missing_info": questions})
 
 
 def default_plan(facts: Facts, brief: ProjectSpecification | None) -> PlanContent:

@@ -41,6 +41,10 @@ class Facts:
     spec_revision: int | None
     stages: dict[str, StageFacts]
     intake_messages: list[str] = field(default_factory=list)
+    # The whole intake chat, so terse answers can be read against the questions they reply to.
+    intake_transcript: list[tuple[str, str]] = field(default_factory=list)
+    # Orchestrator turns the client has replied to; bounds how long it may keep asking.
+    answered_rounds: int = 0
     preferences: dict[str, Any] = field(default_factory=dict)
 
 
@@ -99,17 +103,25 @@ async def collect_facts(db: Db, project: Project) -> Facts:
         {"project_id": project.id}, sort=[("revision", -1)], projection={"revision": 1}
     )
     doc = await db.projects.find_one({"_id": project.id}, {"preferences": 1})
-    messages = [
-        m["text"]
+    transcript = [
+        ("client" if m["role"] == "user" else "orchestrator", m["text"])
         async for m in db.messages.find(
-            {"project_id": project.id, "channel": "intake", "role": "user"}
+            {"project_id": project.id, "channel": "intake", "role": {"$in": ["user", "agent"]}},
+            projection={"role": 1, "text": 1},
         ).sort("seq", 1)
     ]
+    answered = sum(
+        1
+        for (who, _), (nxt, _) in zip(transcript, transcript[1:], strict=False)
+        if who == "orchestrator" and nxt == "client"
+    )
     return Facts(
         project_id=project.id,
         spec_revision=spec["revision"] if spec else None,
         stages={s: await _stage_facts(db, project, s) for s in ARTIFACT_STAGES},
-        intake_messages=messages,
+        intake_messages=[text for who, text in transcript if who == "client"],
+        intake_transcript=transcript,
+        answered_rounds=answered,
         preferences=(doc or {}).get("preferences") or {},
     )
 
