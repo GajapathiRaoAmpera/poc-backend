@@ -105,7 +105,11 @@ class GeminiProvider:
             code, retryable = _STATUS.get(resp.status_code, ("PROVIDER_ERROR", True))
             # Never echo the provider's body: it can contain request details.
             raise ProviderError(
-                code, f"Model provider returned HTTP {resp.status_code}", retryable=retryable
+                code,
+                "The AI service is busy (rate limit reached)"
+                if code == "RATE_LIMITED"
+                else f"The AI service returned an error (HTTP {resp.status_code})",
+                retryable=retryable,
             )
 
         try:

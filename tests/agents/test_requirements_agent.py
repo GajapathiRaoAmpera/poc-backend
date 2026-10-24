@@ -46,7 +46,7 @@ async def test_invalid_then_repaired(db):
     assert len(provider.calls) == 2
     assert "Duplicate requirement ID FR-001" in provider.calls[1]["user"]
     msgs = [e["message"] async for e in db.run_events.find({"run_id": doc["_id"]})]
-    assert any("requesting repair (1/2)" in m for m in msgs)
+    assert any("self-correcting (1/2)" in m for m in msgs)
 
 
 async def test_invalid_three_times_fails_and_persists_nothing(db):

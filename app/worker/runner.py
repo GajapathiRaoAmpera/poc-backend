@@ -193,8 +193,7 @@ class Worker:
             project.id,
             run.id,
             "status",
-            f"Started attempt {job.attempts} of {job.max_attempts} "
-            f"({provider.name}/{provider.model})",
+            f"Started attempt {job.attempts} of {job.max_attempts}",
         )
 
         cancel_flag = {"set": False}

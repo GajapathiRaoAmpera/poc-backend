@@ -65,8 +65,8 @@ async def call_structured[T: BaseModel](
     prompt = user
     issues: list[ValidationIssue] = []
     for attempt in range(max_repairs + 1):
-        label = f" (repair {attempt}/{max_repairs})" if attempt else ""
-        await ctx.emit("step", f"Calling {ctx.provider.name}/{ctx.provider.model}{label}", None)
+        label = f" (self-correction {attempt}/{max_repairs})" if attempt else ""
+        await ctx.emit("step", f"Reasoning over the inputs{label}", None)
         result = await ctx.provider.generate(
             system=system,
             user=prompt,
@@ -85,7 +85,7 @@ async def call_structured[T: BaseModel](
         if not issues:
             return parsed, usage
         tail = (
-            f"requesting repair ({attempt + 1}/{max_repairs})"
+            f"self-correcting ({attempt + 1}/{max_repairs})"
             if attempt < max_repairs
             else "no repairs left"
         )

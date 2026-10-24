@@ -197,8 +197,7 @@ async def run_agent_node(
 
     await emit(
         "status",
-        f"{LABEL.get(stage, stage)} started ({mode}) — attempt {attempt}, "
-        f"{provider.name}/{provider.model}",
+        f"{LABEL.get(stage, stage)} started ({mode}) — attempt {attempt}",
     )
     ctx = AgentContext(db, project, run, provider, emit, deps.cancelled)
     try:

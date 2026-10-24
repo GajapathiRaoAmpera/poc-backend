@@ -99,13 +99,17 @@ class GroqProvider:
                     # It fits on its own: the per-minute budget is shared with other calls.
                     raise ProviderError(
                         "RATE_LIMITED",
-                        "The model provider's per-minute token budget is in use; retrying",
+                        "The AI service's per-minute capacity is in use; retrying",
                         retryable=True,
                     )
                 raise self._too_large()
             # Never echo the provider's body: it can contain request details.
             raise ProviderError(
-                code, f"Model provider returned HTTP {resp.status_code}", retryable=retryable
+                code,
+                "The AI service is busy (rate limit reached)"
+                if code == "RATE_LIMITED"
+                else f"The AI service returned an error (HTTP {resp.status_code})",
+                retryable=retryable,
             )
 
         try:
