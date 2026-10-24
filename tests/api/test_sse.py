@@ -37,3 +37,11 @@ async def test_sse_resumes_from_last_event_id_without_duplicates(owner_client, p
     )
     assert second and min(s for s, _ in second) == last + 1
     assert not {s for s, _ in first} & {s for s, _ in second}
+
+
+async def test_sse_forbids_proxy_transforms(owner_client, project_id):
+    # A compressing proxy (Next.js rewrites gzip by default) buffers the stream until it closes,
+    # so the browser sees an open, silent connection and never falls back to polling.
+    r = await owner_client.get(f"/api/v1/projects/{project_id}/events", params={"max_wait": 0.1})
+    directives = {d.strip() for d in r.headers["cache-control"].split(",")}
+    assert {"no-cache", "no-transform"} <= directives

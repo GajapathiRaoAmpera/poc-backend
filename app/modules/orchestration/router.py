@@ -130,7 +130,8 @@ async def events_stream(
     return StreamingResponse(
         sse.event_stream(request, db, project.id, after, max_wait),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        # no-transform: stops compressing proxies (e.g. Next.js rewrites) buffering the stream.
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
 
 
