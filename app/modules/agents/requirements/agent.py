@@ -18,6 +18,15 @@ async def _all_ids_ever(ctx: AgentContext) -> set[str]:
 
 
 async def run(ctx: AgentContext) -> AgentOutcome:
+    if ctx.run.mode == "chat":
+        from app.modules.agents.requirements import chat
+
+        return await chat.run(ctx)
+    return await draft(ctx)
+
+
+async def draft(ctx: AgentContext) -> AgentOutcome:
+    """Generate (no previous revision in the inputs) or revise the requirements."""
     spec_ref = next(s for s in ctx.run.inputs if s.kind == "specification")
     spec = await ctx.db.project_specifications.find_one(
         {"project_id": ctx.project.id, "revision": spec_ref.revision}
@@ -45,7 +54,7 @@ async def run(ctx: AgentContext) -> AgentOutcome:
         schema_model=RequirementsAgentOutput,
         schema_name="requirements_output",
         system=prompts.SYSTEM,
-        user=prompts.user_prompt(spec["data"], previous, retired),
+        user=prompts.user_prompt(spec["data"], previous, retired, ctx.run.instruction),
         validate=lambda o: agent_issues(o.content, retired, prev_q),
     )
     # Built from the spec only; the previous draft is context, not an approved source.

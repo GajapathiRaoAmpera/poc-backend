@@ -90,19 +90,28 @@ Content stays in the artifact store; the checkpoint stays small and revisions ke
 ### 3.3 Topology
 
 ```
-intake ─▶ orchestrator ─┬─▶ requirements ─▶ orchestrator
-                        ├─▶ ⏸ awaiting_answers ─▶ orchestrator
-                        ├─▶ ⏸ approve(requirements) ─▶ orchestrator
-                        ├─▶ architecture ─▶ orchestrator
-                        ├─▶ ⏸ approve(architecture) ─▶ orchestrator
-                        ├─▶ planning | budget   (C2 — unavailable in C1)
-                        ├─▶ ⏸ orchestrator_failed ─▶ orchestrator
-                        └─▶ END
+START ─▶ orchestrator ─┬─▶ requirements ─▶ orchestrator
+                       ├─▶ architecture ─▶ orchestrator
+                       ├─▶ gate (⏸ interrupt) ─▶ orchestrator
+                       └─▶ END
 ```
 
-- **`orchestrator`** is both planner (LLM call, §4) and router. Routing reads the validated plan
-  plus deterministic facts (artifact approved? stale? blocking questions? last outcome?) and picks
-  the next node; it may re-plan when facts change (e.g. preferences added, stage failed).
+`gate` is one interrupt node whose `pending.kind` is one of `intake_questions` (orchestrator's
+blocking `missing_info`), `awaiting_answers` (requirements blocking questions), `approval`
+(a stage draft awaits approval), `needs_input` (loop budget
+exhausted), `stage_busy` (a chat run is active on the next stage), `quota` (daily quota reached).
+`failed` and `cancelled` are set by the worker, not by an interrupt. Planning/Budget/Code nodes
+are added in C2/C3.
+
+- **`orchestrator`** is planner + router:
+  - **Planner (LLM call, §4)** only when the plan may need to change: no plan yet, a new intake
+    message or preferences change (`trigger = user_message`), requirements newly approved
+    (re-plan with real requirements), or a stage failed non-retryably.
+  - **Router (deterministic, pure function)** otherwise — walk the plan's included stages in
+    dependency order and pick the first that is not done: no draft / stale / changes requested →
+    run the stage (mode `generate` or `revise`); blocking questions → `gate awaiting_answers`;
+    draft not approved → `gate approval`; all approved → `END`. Every run through a stage
+    increments `loops[stage]`; a user action resets it; `loops[stage] > 3` → `gate needs_input`.
 - **Stage nodes** (`requirements`, `architecture`) call the existing agent functions
   (`agents/requirements/agent.py`, `agents/architecture/agent.py`) unchanged in contract.
 - **`⏸` nodes** call `interrupt(payload)`; `payload` says what is needed and is stored on the
@@ -114,11 +123,16 @@ intake ─▶ orchestrator ─┬─▶ requirements ─▶ orchestrator
 - New job type `graph_step` (existing `jobs` gain `type: "agent_run" | "graph_step"`; missing
   `type` means `agent_run` for backward compatibility). A `graph_step` job invokes the compiled
   graph with `thread_id = project_id` until it pauses or ends.
-- Unique sparse `jobs.idempotency_key = "graph:<project_id>"` while active → one graph job per
-  project; duplicate resume requests are no-ops.
+- `jobs.run_id` becomes optional: the unique `run_id` index is replaced by a partial unique index
+  (only where `run_id` is a UUID), and `ensure_indexes` drops the old `run_id_1` index first.
+  A partial unique index on `idempotency_key` (`"graph:<project_id>"`, unset when the job is
+  DONE) guarantees one queued/running graph job per project; a duplicate resume is a no-op.
 - Each stage node records an `agent_run` (stage, agent, mode, inputs, attempts, provider/model,
-  usage, events) created idempotently with key `(thread checkpoint id, node)` so a retry reuses
-  the same run and adds an attempt. The activity drawer, run detail and SSE are unchanged.
+  usage, events) created idempotently with `graph_key = "<project_id>:<langgraph_step>:<node>"`
+  (unique sparse) so a re-executed node after a crash reuses the same run: a `SUCCEEDED` run
+  returns its stored output without calling the model again. Orchestrator planning calls are
+  recorded the same way as runs of agent `project_orchestrator` (stage `orchestrator`) and count
+  toward quota. The activity drawer, run detail and SSE are unchanged.
 - Errors: a retryable `ProviderError` / timeout fails the `graph_step` job attempt; the job retries
   with existing backoff and LangGraph resumes from the last checkpoint (completed nodes are not
   re-run). Non-retryable failures end the agent run `FAILED` and route to `orchestrator`, which
@@ -134,16 +148,19 @@ at each pause/end so the API and UI never need to read raw checkpoints.
 
 ### 3.6 Resuming
 
-| User action | Effect |
-|---|---|
-| Approve requirements / architecture (existing endpoint) | if `pending` is that approval and the approved revision is latest → enqueue `graph_step` with `Command(resume={"decision": "approved", ...})` |
-| Request changes | resume with `{"decision": "changes_requested", comment}` → orchestrator routes back to the stage (revise), counted against the loop budget |
-| Answer questions (chat or existing answers endpoint) | when no blocking question remains unanswered and `pending.kind == "awaiting_answers"` → resume |
-| Intake message while orchestrator asked something | resume with the message |
-| Retry after `orchestrator_failed` | `POST …/delivery/resume` |
+All user actions call one function, `delivery.notify(db, project, trigger, message=None)`:
 
-Staleness (existing propagation) also re-enters the graph: if an approved upstream revision is
-replaced, the orchestrator routes the stale downstream stage to regenerate and re-approve.
+| Thread status | Effect of `notify` |
+|---|---|
+| `PAUSED` at a gate (any kind) | enqueue `graph_step` with `Command(resume={"trigger": trigger, "message": message})` |
+| `DONE` | enqueue `graph_step` with fresh input `{"trigger": trigger}` (same thread, state kept) |
+| `RUNNING` / queued | no-op (the router reads current facts on its next pass) |
+| `FAILED` / `PAUSED cancelled` | no-op; only `POST …/delivery/resume` restarts |
+
+Callers: approve, request-changes, answers (endpoint or chat), preferences save, intake message
+(`trigger = user_message`), chat run finished (`trigger = chat_finished`). Because the router
+derives the next step from stored facts, resuming at any gate is safe: it re-pauses if nothing
+changed. Staleness re-enters naturally: a stale approved stage is "not done" for the router.
 
 ### 3.7 What changes in B1–B3 code
 
@@ -184,8 +201,12 @@ decision_summary: str (≤600)            # shown in UI; no hidden reasoning req
 - `brief` is saved as a new **project specification revision** (origin `orchestrator`), so the
   Requirements Agent keeps reading a specification exactly as today and spec→requirements
   staleness keeps working. User preferences are merged in and win on conflict.
-- Called on intake, after every stage outcome, and after every user decision, with a compact state
-  digest (stage statuses, artifact summaries, answers) — never full artifact content.
+- Called only on the planner triggers in §3.3, with a compact state digest (stage statuses,
+  artifact summaries, intake messages, answers) — never full artifact content. A new
+  specification revision is written only when the merged brief differs from the latest one
+  (otherwise every re-plan would mark requirements stale).
+- Preferences are stored on the project (`projects.preferences`, the `Constraints` model) via
+  `PUT /projects/{id}/preferences` and merged into `brief.constraints` (user values win).
 
 ### 4.3 Policy validator (deterministic; errors trigger the repair loop)
 
@@ -249,8 +270,10 @@ approve / request-changes action.
 
 ## 6. 3D agent graph (three.js)
 
-- Libraries: `three`, `@react-three/fiber` 9, `@react-three/drei` (exact versions pinned in the
-  plan). Lazy-loaded (`next/dynamic`, `ssr: false`) on the project overview only.
+- Libraries: `three` 0.186, `@react-three/fiber` 9.8, `@react-three/drei` 10.7 (exact pins in the
+  plan). Built following the `cloudai-x/threejs-skills` skills (MIT; r186 / R3F 9.8 / drei 10.7),
+  installed project-scoped in `poc-frontend/.claude/skills/`: `frameloop="demand"`, refs not
+  `setState` in `useFrame`, delta-based motion, drei `OrbitControls makeDefault`. Lazy-loaded (`next/dynamic`, `ssr: false`) on the project overview only.
 - **Scene:** one node per planned stage plus the Orchestrator at the hub; edges follow the plan's
   `inputs`. Unplanned stages are not drawn; unavailable ones are ghosted.
 - **State mapping (pure function, unit-tested)** from workflow + thread + recent events:

@@ -4,10 +4,11 @@ from fastapi import APIRouter, Response, status
 
 from app.core.deps import CurrentUser, DbSession
 from app.core.pagination import Page, PageParams
+from app.modules.delivery.service import notify
 from app.modules.projects import service
 from app.modules.projects.models import ProjectStatus
 from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
-from app.modules.projects.spec_schema import ProjectSpecification
+from app.modules.projects.spec_schema import Constraints, ProjectSpecification
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -56,4 +57,20 @@ async def get_specification(project_id: uuid.UUID, user: CurrentUser, db: DbSess
 async def save_specification(
     project_id: uuid.UUID, data: ProjectSpecification, user: CurrentUser, db: DbSession
 ) -> SpecOut:
-    return await service.save_specification(db, user, project_id, data)
+    out = await service.save_specification(db, user, project_id, data)
+    # A manual brief edit is authoritative: no re-plan (the orchestrator would rewrite the brief);
+    # requirements built on the old brief are stale and the router redoes them.
+    await notify(db, await service.get_project_for(db, user, project_id), "edited:specification")
+    return out
+
+
+@router.put("/{project_id}/preferences")
+async def save_preferences(
+    project_id: uuid.UUID, data: Constraints, user: CurrentUser, db: DbSession
+) -> ProjectOut:
+    """Optional preferences; they override the Orchestrator's brief on its next plan."""
+    out = await service.save_preferences(
+        db, user, project_id, data.model_dump(mode="json", exclude_none=True)
+    )
+    await notify(db, await service.get_project_for(db, user, project_id), "user_message")
+    return out

@@ -1,6 +1,6 @@
 import re
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from pymongo.errors import DuplicateKeyError
 
@@ -60,6 +60,8 @@ def to_out(project: Project, spec: ProjectSpecification | None) -> ProjectOut:
         created_at=project.created_at,
         updated_at=project.updated_at,
         completeness=completeness(spec.data if spec else None),
+        name_source=project.name_source,
+        preferences=project.preferences,
     )
 
 
@@ -159,12 +161,15 @@ async def get_specification(db: Db, user: User, project_id: uuid.UUID) -> SpecOu
     return _spec_out((await latest_specs(db, [project.id])).get(project.id))
 
 
-async def save_specification(db: Db, user: User, project_id: uuid.UUID, data: SpecData) -> SpecOut:
-    """Append revision n+1. Never updates an existing revision."""
-    project = await get_project_for(db, user, project_id)
-    payload = data.model_dump(mode="json", exclude_none=True)
-    new_name = data.basics.name if data.basics and data.basics.name else None
-
+async def add_spec_revision(
+    db: Db,
+    project: Project,
+    data: dict[str, Any],
+    *,
+    created_by: uuid.UUID | None,
+    origin: Literal["user", "orchestrator"] = "user",
+) -> ProjectSpecification:
+    """Append revision n+1 and mark requirements built on older revisions stale."""
     for attempt in range(2):
         last = await db.project_specifications.find_one(
             {"project_id": project.id}, sort=[("revision", -1)], projection={"revision": 1}
@@ -172,8 +177,9 @@ async def save_specification(db: Db, user: User, project_id: uuid.UUID, data: Sp
         spec = ProjectSpecification(
             project_id=project.id,
             revision=(last["revision"] if last else 0) + 1,
-            data=payload,
-            created_by=user.id,
+            data=data,
+            origin=origin,
+            created_by=created_by,
         )
         try:
             # The unique (project_id, revision) index arbitrates concurrent saves.
@@ -182,11 +188,35 @@ async def save_specification(db: Db, user: User, project_id: uuid.UUID, data: Sp
             if attempt == 1:
                 raise Conflict("The specification was changed by another save. Reload.") from exc
             continue
-        update: dict[str, Any] = {"updated_at": now()}
-        if new_name:
-            update["name"] = new_name
-        await db.projects.update_one({"_id": project.id}, {"$set": update})
         # Requirements built from an older spec revision are now stale.
         await mark_dependents_stale(db, project, "specification", spec.revision)
-        return _spec_out(spec)
+        return spec
     raise AssertionError("unreachable")
+
+
+async def save_specification(db: Db, user: User, project_id: uuid.UUID, data: SpecData) -> SpecOut:
+    """Append revision n+1. Never updates an existing revision."""
+    project = await get_project_for(db, user, project_id)
+    payload = data.model_dump(mode="json", exclude_none=True)
+    new_name = data.basics.name if data.basics and data.basics.name else None
+    spec = await add_spec_revision(db, project, payload, created_by=user.id)
+    update: dict[str, Any] = {"updated_at": now()}
+    if new_name:
+        update["name"] = new_name
+        update["name_source"] = "user"
+    await db.projects.update_one({"_id": project.id}, {"$set": update})
+    return _spec_out(spec)
+
+
+async def save_preferences(
+    db: Db, user: User, project_id: uuid.UUID, data: dict[str, Any]
+) -> ProjectOut:
+    project = await get_project_for(db, user, project_id)
+    project.preferences = data or None
+    project.updated_at = now()
+    await db.projects.update_one(
+        {"_id": project.id},
+        {"$set": {"preferences": project.preferences, "updated_at": project.updated_at}},
+    )
+    specs = await latest_specs(db, [project.id])
+    return to_out(project, specs.get(project.id))

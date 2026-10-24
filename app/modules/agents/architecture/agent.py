@@ -34,13 +34,20 @@ async def run(ctx: AgentContext) -> AgentOutcome:
     )
     if ctx.run.mode == "change_request":
         return await _change_request(ctx, reqs)
+    if ctx.run.mode == "chat":
+        from app.modules.agents.architecture import chat
 
+        return await chat.run(ctx, req_ref, reqs)
+    return await generate(ctx, req_ref, reqs)
+
+
+async def generate(ctx: AgentContext, req_ref, reqs: dict) -> AgentOutcome:
     out, usage = await call_structured(
         ctx,
         schema_model=ArchitectureAgentOutput,
         schema_name="architecture_output",
         system=prompts.GENERATE_SYSTEM,
-        user=prompts.generate_prompt(reqs),
+        user=prompts.generate_prompt(reqs, ctx.run.instruction),
         validate=lambda o: _issues_for(o.content, reqs),
         max_output_tokens=12000,
     )

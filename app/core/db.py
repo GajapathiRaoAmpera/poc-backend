@@ -94,10 +94,30 @@ INDEXES: dict[str, list[IndexModel]] = {
             partialFilterExpression={"active": True},
             name="one_active_run_per_stage",
         ),
+        # Delivery-graph node runs are reused on re-execution (crash recovery).
+        IndexModel(
+            [("graph_key", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"graph_key": {"$type": "string"}},
+            name="one_run_per_graph_node",
+        ),
     ],
     "jobs": [
         IndexModel([("status", ASCENDING), ("run_after", ASCENDING)]),
-        IndexModel([("run_id", ASCENDING)], unique=True),
+        # Agent-run jobs: one per run. Graph-step jobs have no run_id.
+        IndexModel(
+            [("run_id", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"run_id": {"$type": "binData"}},
+            name="one_job_per_run",
+        ),
+        # One queued/running graph job per project ("graph:<project_id>").
+        IndexModel(
+            [("idempotency_key", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"idempotency_key": {"$type": "string"}},
+            name="one_active_graph_job",
+        ),
     ],
     "run_events": [IndexModel([("project_id", ASCENDING), ("seq", ASCENDING)], unique=True)],
     "change_sets": [
@@ -107,10 +127,25 @@ INDEXES: dict[str, list[IndexModel]] = {
     "approvals": [
         IndexModel([("project_id", ASCENDING), ("kind", ASCENDING), ("decided_at", DESCENDING)])
     ],
+    "delivery_threads": [IndexModel([("project_id", ASCENDING)], unique=True)],
+    "plans": [IndexModel([("project_id", ASCENDING), ("version", ASCENDING)], unique=True)],
+    "conversations": [IndexModel([("project_id", ASCENDING), ("channel", ASCENDING)], unique=True)],
+    "messages": [
+        IndexModel([("conversation_id", ASCENDING), ("seq", ASCENDING)], unique=True),
+        IndexModel([("project_id", ASCENDING)]),
+    ],
 }
+
+# Indexes replaced by differently-optioned ones; dropped before creating the new set.
+LEGACY_INDEXES = {"jobs": ["run_id_1"]}
 
 
 async def ensure_indexes(db: Db) -> None:
     """Idempotent: safe to call on every startup."""
+    for name, legacy in LEGACY_INDEXES.items():
+        existing = {i["name"] async for i in await db[name].list_indexes()}
+        for index in legacy:
+            if index in existing:
+                await db[name].drop_index(index)
     for name, indexes in INDEXES.items():
         await db[name].create_indexes(indexes)

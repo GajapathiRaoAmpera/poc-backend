@@ -61,10 +61,28 @@ async def dependency_blockers(db: Db, project: Project, stage: str) -> list[str]
     return reasons
 
 
-async def stage_status(db: Db, project: Project, stage: str) -> StageState:
+async def stage_status(
+    db: Db,
+    project: Project,
+    stage: str,
+    planned: set[str] | None = None,
+    pending: dict | None = None,
+) -> StageState:
+    """``planned``: stages the current orchestrator plan includes (None = no plan yet).
+    ``pending``: the gate the delivery graph is paused at, if any."""
     if stage not in AVAILABLE:
         return StageState(stage, "UNAVAILABLE", ["Available in a coming release"])
+    state = await _derived_status(db, project, stage)
+    if planned is not None and stage not in planned and state.status in ("NOT_STARTED", "BLOCKED"):
+        state.status, state.reasons = "NOT_PLANNED", ["The orchestrator's plan skips this stage"]
+    if pending and pending.get("stage") == stage and state.status not in ("QUEUED", "RUNNING"):
+        from app.modules.delivery.threads import describe
 
+        state.reasons = [describe("PAUSED", pending)]
+    return state
+
+
+async def _derived_status(db: Db, project: Project, stage: str) -> StageState:
     run = await latest_run(db, project, stage)
     art = await artifacts.get_artifact(db, project, stage)
     rev = (
@@ -114,4 +132,11 @@ async def stage_status(db: Db, project: Project, stage: str) -> StageState:
 
 
 async def workflow(db: Db, project: Project) -> list[StageState]:
-    return [await stage_status(db, project, s) for s in STAGES]
+    from app.modules.delivery.plans import current_plan
+    from app.modules.delivery.threads import get_thread
+
+    plan = await current_plan(db, project)
+    planned = {s["stage"] for s in plan.content["stages"] if s["include"]} if plan else None
+    thread = await get_thread(db, project)
+    pending = thread.pending if thread and thread.status == "PAUSED" else None
+    return [await stage_status(db, project, s, planned, pending) for s in STAGES]

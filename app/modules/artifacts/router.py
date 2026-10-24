@@ -9,6 +9,7 @@ from app.core.errors import NotFound, RevisionConflict, StageBlocked
 from app.modules.agents.requirements.service import save_answers
 from app.modules.artifacts import service
 from app.modules.artifacts.models import SourceRef, ValidationIssue
+from app.modules.delivery.service import notify
 from app.modules.diagrams.diff import DiagramDiff, diff
 from app.modules.diagrams.schema import ArchitectureContent
 from app.modules.orchestration import service as orchestration
@@ -121,6 +122,7 @@ async def save_revision(
         created_by=user.id,
         base_revision=body.base_revision if body.base_revision is not None else 0,
     )
+    await notify(db, project, f"edited:{kind}")
     return revision_out(rev)
 
 
@@ -139,7 +141,9 @@ async def restore(
     project_id: uuid.UUID, kind: Kind, n: int, user: CurrentUser, db: DbSession
 ) -> RevisionOut:
     project = await get_project_for(db, user, project_id)
-    return revision_out(await service.restore(db, project, kind, n, user))
+    rev = await service.restore(db, project, kind, n, user)
+    await notify(db, project, f"edited:{kind}")
+    return revision_out(rev)
 
 
 @router.post("/artifacts/{kind}/revisions/{n}/approve")
@@ -147,7 +151,9 @@ async def approve(
     project_id: uuid.UUID, kind: Kind, n: int, body: DecisionIn, user: CurrentUser, db: DbSession
 ) -> ApprovalOut:
     project = await get_project_for(db, user, project_id)
-    return approval_out(await service.approve(db, project, kind, n, user, body.comment))
+    approval = await service.approve(db, project, kind, n, user, body.comment)
+    await notify(db, project, f"approved:{kind}")
+    return approval_out(approval)
 
 
 @router.post("/artifacts/{kind}/revisions/{n}/request-changes")
@@ -155,7 +161,9 @@ async def request_changes(
     project_id: uuid.UUID, kind: Kind, n: int, body: DecisionIn, user: CurrentUser, db: DbSession
 ) -> ApprovalOut:
     project = await get_project_for(db, user, project_id)
-    return approval_out(await service.request_changes(db, project, kind, n, user, body.comment))
+    approval = await service.request_changes(db, project, kind, n, user, body.comment)
+    await notify(db, project, f"changes_requested:{kind}")
+    return approval_out(approval)
 
 
 @router.put("/artifacts/requirements/answers", status_code=status.HTTP_201_CREATED)
@@ -163,7 +171,9 @@ async def answers(
     project_id: uuid.UUID, body: AnswersIn, user: CurrentUser, db: DbSession
 ) -> RevisionOut:
     project = await get_project_for(db, user, project_id)
-    return revision_out(await save_answers(db, project, user, body.answers, body.base_revision))
+    rev = await save_answers(db, project, user, body.answers, body.base_revision)
+    await notify(db, project, "answers")
+    return revision_out(rev)
 
 
 @router.get("/artifacts/architecture/compare")

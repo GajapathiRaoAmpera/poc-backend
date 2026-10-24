@@ -100,3 +100,22 @@ def change_set_output(system: str, user: str) -> dict:
             }
         )
     return {"ops": ops, "summary": f"[Mock] Added {label} connected to the API."}
+
+
+def architecture_chat_output(system: str, user: str) -> dict:
+    instruction = _between(user, "instruction") or ""
+    current = (_between(user, "current_architecture") or "").strip()
+    if current:
+        cs = change_set_output(system, user)
+        return {
+            "reply": cs["summary"],
+            "action": "propose_changes",
+            "ops": cs["ops"],
+            "instruction": None,
+        }
+    return {
+        "reply": "[Mock] I'll draft the architecture with that in mind.",
+        "action": "generate",
+        "ops": [],
+        "instruction": instruction or None,
+    }

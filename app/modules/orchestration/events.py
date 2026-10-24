@@ -22,7 +22,7 @@ async def _next_seq(db: Db, project_id: uuid.UUID, session=None) -> int:
 async def emit(
     db: Db,
     project_id: uuid.UUID,
-    run_id: uuid.UUID,
+    run_id: uuid.UUID | None,
     type: EventType,
     message: str,
     data: dict[str, Any] | None = None,

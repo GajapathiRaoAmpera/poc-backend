@@ -1,7 +1,10 @@
 from app.llm.fixtures import register_default
 from app.modules.agents.base import register_agent
 from app.modules.agents.requirements import agent
-from app.modules.agents.requirements.mock_fixture import requirements_output
+from app.modules.agents.requirements.mock_fixture import (
+    requirements_chat_output,
+    requirements_output,
+)
 from app.modules.agents.requirements.schema import RequirementsContent
 from app.modules.agents.requirements.validate import (
     approval_issues,
@@ -25,3 +28,4 @@ def register() -> None:
     stages.INPUT_CHECKS["requirements"] = has_unanswered_blocking
     register_agent(agent.NAME, agent.run)
     register_default("requirements_output", requirements_output)
+    register_default("requirements_chat_output", requirements_chat_output)

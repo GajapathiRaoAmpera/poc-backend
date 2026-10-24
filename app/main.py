@@ -12,6 +12,8 @@ from app.modules.agents import load_all
 from app.modules.artifacts.router import router as artifacts_router
 from app.modules.auth.router import router as auth_router
 from app.modules.changesets.router import router as changesets_router
+from app.modules.conversations.router import router as conversations_router
+from app.modules.delivery.router import router as delivery_router
 from app.modules.orchestration.router import router as workflow_router
 from app.modules.projects.router import router as projects_router
 from app.modules.users.router import router as users_router
@@ -53,10 +55,12 @@ def create_app() -> FastAPI:
 
     api.include_router(auth_router)
     api.include_router(users_router)
+    api.include_router(delivery_router)
     api.include_router(projects_router)
     api.include_router(workflow_router)
     api.include_router(artifacts_router)
     api.include_router(changesets_router)
+    api.include_router(conversations_router)
     app.include_router(api)
     return app
 

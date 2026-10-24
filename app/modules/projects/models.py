@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -21,6 +21,10 @@ class Project(Timestamped):
     name: str
     description: str | None = None
     status: ProjectStatus = ProjectStatus.DRAFT
+    # "intake": placeholder taken from the first intake message; the orchestrator may rename it.
+    name_source: Literal["user", "intake", "orchestrator"] = "user"
+    # Optional user preferences (the spec's ``Constraints`` shape); override the orchestrator.
+    preferences: dict[str, Any] | None = None
 
 
 class ProjectSpecification(Document):
@@ -29,5 +33,6 @@ class ProjectSpecification(Document):
     project_id: uuid.UUID
     revision: int
     data: dict[str, Any]
+    origin: Literal["user", "orchestrator"] = "user"
     created_by: uuid.UUID | None = None
     created_at: datetime = Field(default_factory=now)

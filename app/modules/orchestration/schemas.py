@@ -16,7 +16,7 @@ class StartRunIn(BaseModel):
 
 class RunEventOut(BaseModel):
     seq: int
-    run_id: uuid.UUID
+    run_id: uuid.UUID | None
     ts: datetime
     type: str
     message: str

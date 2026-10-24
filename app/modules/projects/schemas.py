@@ -31,6 +31,8 @@ class ProjectOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     completeness: float
+    name_source: str = "user"
+    preferences: dict[str, Any] | None = None
 
 
 class SpecOut(BaseModel):

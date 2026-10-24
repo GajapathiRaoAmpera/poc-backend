@@ -46,3 +46,17 @@ def register_agent(name: str, fn: AgentFn) -> None:
 
 def get_agent(name: str) -> AgentFn:
     return _REGISTRY[name]
+
+
+RunFinishedHook = Callable[[Db, AgentRun], Awaitable[None]]
+_RUN_FINISHED: list[RunFinishedHook] = []
+
+
+def register_run_finished(fn: RunFinishedHook) -> None:
+    """Called by the worker after a queued agent run reaches a terminal status."""
+    if fn not in _RUN_FINISHED:
+        _RUN_FINISHED.append(fn)
+
+
+def run_finished_hooks() -> list[RunFinishedHook]:
+    return list(_RUN_FINISHED)

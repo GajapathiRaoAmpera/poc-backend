@@ -9,6 +9,7 @@ from app.core.deps import CurrentUser, DbSession
 from app.modules.artifacts.models import ValidationIssue
 from app.modules.changesets import service
 from app.modules.changesets.models import ChangeSet
+from app.modules.delivery.service import notify
 from app.modules.diagrams.diff import Impact
 from app.modules.orchestration.schemas import RevisionOut, revision_out
 from app.modules.projects.service import get_project_for
@@ -81,7 +82,9 @@ async def apply(
     project_id: uuid.UUID, change_set_id: uuid.UUID, user: CurrentUser, db: DbSession
 ) -> RevisionOut:
     project = await get_project_for(db, user, project_id)
-    return revision_out(await service.apply_change_set(db, project, change_set_id, user))
+    rev = await service.apply_change_set(db, project, change_set_id, user)
+    await notify(db, project, "edited:architecture")
+    return revision_out(rev)
 
 
 @router.post("/change-sets/{change_set_id}/reject")

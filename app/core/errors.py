@@ -127,3 +127,15 @@ class QuotaExceeded(AppError):
             429,
             {"limit": limit},
         )
+
+
+class GraphBusy(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "GRAPH_BUSY", "The delivery workflow is already running. Wait for it to pause.", 409
+        )
+
+
+class NotPaused(AppError):
+    def __init__(self, message: str = "The delivery workflow is not paused.") -> None:
+        super().__init__("NOT_PAUSED", message, 409)

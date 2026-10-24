@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 from app.core.documents import Document, now
 from app.modules.artifacts.models import SourceRef
 
-RunMode = Literal["generate", "revise", "change_request"]
-EventType = Literal["status", "step", "validation", "error"]
+RunMode = Literal["generate", "revise", "change_request", "chat"]
+EventType = Literal["status", "step", "validation", "error", "message", "graph"]
 
 
 class RunStatus(StrEnum):
@@ -63,6 +63,8 @@ class AgentRun(Document):
     error: RunError | None = None
     cancel_requested: bool = False
     retry_of: uuid.UUID | None = None
+    # Set for runs executed by a delivery-graph node: "<project_id>:<langgraph_step>:<node>".
+    graph_key: str | None = None
     created_by: uuid.UUID
     created_at: datetime = Field(default_factory=now)
     started_at: datetime | None = None
@@ -70,11 +72,14 @@ class AgentRun(Document):
 
 
 class Job(Document):
-    """Collection ``jobs``: the durable queue entry driving one agent run."""
+    """Collection ``jobs``: the durable queue entry driving one agent run or one graph step."""
 
-    run_id: uuid.UUID
+    run_id: uuid.UUID | None = None
     project_id: uuid.UUID
-    type: str = "agent_run"
+    type: Literal["agent_run", "graph_step"] = "agent_run"
+    # "graph:<project_id>" while a graph job is queued/running (unset when DONE).
+    idempotency_key: str | None = None
+    input: dict[str, Any] | None = None
     status: Literal["QUEUED", "RUNNING", "DONE"] = "QUEUED"
     attempts: int = 0
     max_attempts: int = 3
@@ -90,7 +95,7 @@ class RunEvent(Document):
     """Collection ``run_events``: the transparent, ordered activity log per project."""
 
     project_id: uuid.UUID
-    run_id: uuid.UUID
+    run_id: uuid.UUID | None = None  # None for graph and conversation events
     seq: int
     ts: datetime = Field(default_factory=now)
     type: EventType

@@ -41,6 +41,32 @@ AI agents run in the **worker**, not the API: if runs stay "Queued", the worker 
 Several workers can run at once; jobs are leased in MongoDB, retried with backoff (max 3
 attempts), time out after `AGENT_TIMEOUT_S`, and are picked up again if a worker crashes.
 
+## Agentic delivery workflow
+
+Design: [`docs/specs/2026-10-24-agentic-core-design.md`](docs/specs/2026-10-24-agentic-core-design.md)
+
+A project starts from one sentence (`POST /api/v1/projects/intake`). Each project then has a
+**LangGraph delivery graph** (`app/modules/delivery/`), run by the worker as `graph_step` jobs
+and checkpointed to MongoDB (`graph_checkpoints`, `graph_checkpoint_writes`):
+
+```
+START → orchestrator ⇄ requirements | architecture | gate (interrupt) → END
+```
+
+- The **Project Orchestrator Agent** (`agents/orchestrator/`) turns the idea and the current state
+  into a versioned plan (`plans`): which stages run, their inputs, approvals, questions, and the
+  project brief (saved as a specification revision). A deterministic policy validates every plan;
+  after one failed repair a safe default plan is used and labelled.
+- A pure **router** (`delivery/routing.py`) picks the next node from the plan and fresh facts.
+- **Gates** pause the graph for the user: orchestrator questions, requirements questions,
+  approvals, loop budget (3 automatic re-runs per stage), quota, a busy stage.
+- Approvals, answers, edits, preferences and chat messages call `delivery.notify`, which resumes
+  the paused graph (one graph job per project; duplicates are no-ops).
+- Each stage has its own **agent chat** (`/projects/{id}/conversations/{intake|requirements|
+  architecture}/messages`); chat runs reply, record answers, revise drafts or propose change sets.
+- Thread state for the UI: `GET /projects/{id}/delivery` (`delivery_threads`); live updates arrive
+  on the existing SSE stream as `graph` and `message` events.
+
 `create-superadmin` prompts for the password twice; no default accounts exist.
 
 ## Test
@@ -57,7 +83,10 @@ uv run ruff check .
 
 - **Password reset email:** no email provider is configured. In `development` the reset link is
   written to the server log; in other environments the request is accepted but nothing is sent.
-- **AI agents:** not part of this release; `daily_run_limit` is stored for later use.
+- **Agents available:** Project Orchestrator, Requirements, Architecture. Planning, Budget,
+  Development, Validation and Repair agents are planned (C2/C3) and shown as unavailable.
+- **Checkpointer:** the official `MongoDBSaver` uses a synchronous client in a thread pool (one
+  extra MongoDB connection pool per worker).
 - **Login throttling** is per email + IP (`login_attempts`, auto-deleted after 24 h by a TTL index).
   Expired sessions and reset tokens are also removed by TTL indexes (MongoDB checks about once a
   minute; the API also checks expiry on every request).

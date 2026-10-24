@@ -39,6 +39,12 @@ async def _resolve_inputs(
             {"project_id": project.id}, sort=[("revision", -1)]
         )
         inputs = [SourceRef(kind="specification", revision=last["revision"])]
+        if mode == "chat":
+            art = await artifacts.get_artifact(db, project, "requirements")
+            if art is not None and art.latest_revision:
+                inputs.append(
+                    SourceRef(kind="requirements", artifact_id=art.id, revision=art.latest_revision)
+                )
         if mode == "revise":
             art = await artifacts.get_artifact(db, project, "requirements")
             if art is None or art.latest_revision == 0:
@@ -49,6 +55,12 @@ async def _resolve_inputs(
         return inputs
     req = await artifacts.get_artifact(db, project, "requirements")
     inputs = [SourceRef(kind="requirements", artifact_id=req.id, revision=req.approved_revision)]
+    if mode == "chat":
+        arch = await artifacts.get_artifact(db, project, "architecture")
+        if arch is not None and arch.latest_revision:
+            inputs.append(
+                SourceRef(kind="architecture", artifact_id=arch.id, revision=arch.latest_revision)
+            )
     if mode == "change_request":
         arch = await artifacts.get_artifact(db, project, "architecture")
         if arch is None or arch.latest_revision == 0:

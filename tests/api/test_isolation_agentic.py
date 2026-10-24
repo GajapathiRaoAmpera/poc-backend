@@ -36,6 +36,15 @@ ROUTES = [
     ("post", "/change-sets/{cid}/apply", None),
     ("post", "/change-sets/{cid}/reject", None),
     ("get", "/approvals", None),
+    ("get", "/delivery", None),
+    ("post", "/delivery/resume", None),
+    ("post", "/delivery/cancel", None),
+    ("get", "/plans", None),
+    ("get", "/plans/1", None),
+    ("put", "/preferences", {"deployment_preference": "Azure"}),
+    ("get", "/conversations/intake/messages", None),
+    ("post", "/conversations/intake/messages", {"text": "hi"}),
+    ("post", "/conversations/requirements/messages", {"text": "hi"}),
 ]
 
 

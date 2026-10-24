@@ -64,3 +64,31 @@ def requirements_output(system: str, user: str) -> dict:
         },
         "summary": f"[Mock] Drafted {len(items)} requirements and 1 open question.",
     }
+
+
+def requirements_chat_output(system: str, user: str) -> dict:
+    current = _between(user, "current_requirements") or {}
+    instruction = (_between_text(user, "instruction") or "").strip()
+    open_ids = [
+        q["id"]
+        for q in current.get("open_questions", [])
+        if q.get("blocking") and not q.get("answer")
+    ]
+    if open_ids and instruction:
+        return {
+            "reply": f"[Mock] Thanks — I recorded that as the answer to {open_ids[0]}.",
+            "action": "answer_questions",
+            "answers": {open_ids[0]: instruction},
+            "instruction": None,
+        }
+    return {
+        "reply": "[Mock] I'll revise the requirements accordingly.",
+        "action": "revise",
+        "answers": {},
+        "instruction": instruction or None,
+    }
+
+
+def _between_text(text: str, tag: str) -> str | None:
+    m = re.search(rf"<{tag}>\n(.*?)\n</{tag}>", text, re.S)
+    return m.group(1) if m else None

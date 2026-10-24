@@ -20,10 +20,17 @@ from pymongo import ReturnDocument
 from app.core.db import Db
 from app.core.documents import now
 from app.llm.base import LLMProvider, ProviderError
-from app.modules.agents.base import AgentContext, AgentOutcome, OutputInvalid, get_agent
+from app.modules.agents.base import (
+    AgentContext,
+    AgentOutcome,
+    OutputInvalid,
+    get_agent,
+    run_finished_hooks,
+)
 from app.modules.orchestration import events, runs
 from app.modules.orchestration.models import AgentRun, Job, RunError, RunStatus
 from app.modules.projects.models import Project
+from app.worker import graph_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +54,10 @@ class Worker:
         lease_s: float = 60,
         heartbeat_s: float = 20,
         poll_s: float = 1.0,
+        graph=None,
     ) -> None:
         self.db = db
+        self._graph = graph
         self.provider_factory = provider_factory
         self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
         self.lease_s = lease_s
@@ -100,10 +109,22 @@ class Worker:
             },
         )
 
+    @property
+    def graph(self):
+        if self._graph is None:
+            from app.modules.delivery.checkpoint import make_checkpointer
+            from app.modules.delivery.graph import build_graph
+
+            self._graph = build_graph(make_checkpointer(self.db))
+        return self._graph
+
     async def run_once(self) -> bool:
         job = await self._claim()
         if job is None:
             return False
+        if job.type == "graph_step":
+            await graph_jobs.run_graph_job(self, job)
+            return True
         doc = await self.db.agent_runs.find_one({"_id": job.run_id})
         run = AgentRun.from_doc(doc)
         project = Project.from_doc(await self.db.projects.find_one({"_id": run.project_id}))
@@ -115,6 +136,7 @@ class Worker:
             await runs.transition(self.db, run.id, {run.status}, RunStatus.CANCELLED)
             await self._finish_job(job)
             await events.emit(self.db, project.id, run.id, "status", "Cancelled")
+            await self._run_finished(run.id)
             return True
 
         provider = self.provider_factory()
@@ -221,7 +243,19 @@ class Worker:
             heartbeat.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat
+        await self._run_finished(run.id)
         return True
+
+    async def _run_finished(self, run_id: uuid.UUID) -> None:
+        doc = await self.db.agent_runs.find_one({"_id": run_id})
+        run = AgentRun.from_doc(doc)
+        if run.status in (RunStatus.QUEUED, RunStatus.RUNNING):
+            return  # retrying
+        for hook in run_finished_hooks():
+            try:
+                await hook(self.db, run)
+            except Exception:
+                logger.exception("Run-finished hook failed for run %s", run.id)
 
     async def _heartbeat(
         self, job: Job, run: AgentRun, agent_task: asyncio.Future, cancel_flag: dict
