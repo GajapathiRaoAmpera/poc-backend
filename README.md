@@ -18,10 +18,12 @@ Copy `.env.example` to `.env`:
 |---|---|
 | `MONGODB_URI` | Atlas connection string (`mongodb+srv://…`). In Atlas → Network Access, allow the IP of the machine running the API. |
 | `MONGODB_DB` | Database name (default `ampera`). |
-| `LLM_PROVIDER` | `groq` (default) or `mock`. `mock` is for tests/offline demos and is refused when `ENVIRONMENT=production`; runs made with it are labelled "Mock provider" in the UI. |
+| `LLM_PROVIDER` | `groq` (default), `gemini` or `mock`. `mock` is for tests/offline demos and is refused when `ENVIRONMENT=production`; runs made with it are labelled "Mock provider" in the UI. |
 | `GROQ_API_KEY` | Groq API key (server-side only; never logged or sent to the browser). Required when `LLM_PROVIDER=groq`. |
 | `GROQ_MODEL` | Default `openai/gpt-oss-120b`. Must be a Groq model that supports `response_format: json_schema`. |
 | `GROQ_MAX_INPUT_TOKENS` | Default `8000`, Groq's free-tier tokens-per-minute limit, which also caps a single request. Larger prompts fail with `TOO_LARGE` instead of an opaque HTTP 413. Raise it on a paid tier; leave empty to disable the check. |
+| `GEMINI_API_KEY` | Google AI Studio API key (server-side only; sent in a header, never logged). Required when `LLM_PROVIDER=gemini`. |
+| `GEMINI_MODEL` | Default `gemini-2.5-flash`. Any Gemini model that supports JSON-schema structured output. |
 | `PLATFORM_DAILY_RUN_LIMIT` | Agent runs per user per rolling 24 h (default 50; a Super Admin can override per user). |
 | `AGENT_TIMEOUT_S` | Per-attempt agent timeout in seconds (default 180). |
 | `APP_ORIGIN` | Origin of the web app, e.g. `http://localhost:3000`. Mutating requests from other origins are rejected. |

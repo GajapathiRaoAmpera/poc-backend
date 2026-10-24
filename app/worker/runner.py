@@ -51,7 +51,9 @@ RATE_LIMIT_WAIT_S = 60
 
 def retry_delay(code: str | None, attempt: int) -> float:
     delay = backoff_seconds(attempt)
-    return max(delay, RATE_LIMIT_WAIT_S * random.uniform(1.0, 1.2)) if code == "RATE_LIMITED" else delay  # noqa: S311
+    if code != "RATE_LIMITED":
+        return delay
+    return max(delay, RATE_LIMIT_WAIT_S * random.uniform(1.0, 1.2))  # noqa: S311 (jitter)
 
 
 class Worker:
@@ -137,6 +139,14 @@ class Worker:
         doc = await self.db.agent_runs.find_one({"_id": job.run_id})
         run = AgentRun.from_doc(doc)
         project = Project.from_doc(await self.db.projects.find_one({"_id": run.project_id}))
+
+        if run.graph_key:
+            logger.error(
+                "Graph run %s was queued as a standalone agent job; completing orphaned job",
+                run.id,
+            )
+            await self._finish_job(job, last_error="GRAPH_RUN_MISCLASSIFIED")
+            return True
 
         if run.status not in (RunStatus.QUEUED, RunStatus.RUNNING):
             await self._finish_job(job)  # e.g. cancelled while queued
@@ -303,7 +313,7 @@ class Worker:
         if not retryable or job.attempts >= job.max_attempts:
             await self._fail(job, run, project, code, message)
             return
-        delay = backoff_seconds(job.attempts)
+        delay = retry_delay(code, job.attempts)
         await self._record_attempt(run, job, "RETRYING", error_code=code)
         await runs.transition(self.db, run.id, {RunStatus.RUNNING}, RunStatus.QUEUED)
         await self.db.jobs.update_one(

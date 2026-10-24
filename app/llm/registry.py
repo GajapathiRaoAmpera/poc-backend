@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from app.core.config import Settings, get_settings
 from app.llm.base import LLMProvider
+from app.llm.gemini import GeminiProvider
 from app.llm.groq import GroqProvider
 from app.llm.mock import MockProvider
 
@@ -13,6 +14,10 @@ def build_provider(settings: Settings) -> LLMProvider:
         if settings.environment == "production":
             raise RuntimeError("LLM_PROVIDER=mock is not allowed when ENVIRONMENT=production")
         return MockProvider()
+    if settings.llm_provider == "gemini":
+        if settings.gemini_api_key is None or not settings.gemini_api_key.get_secret_value():
+            raise RuntimeError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
+        return GeminiProvider(settings.gemini_api_key.get_secret_value(), settings.gemini_model)
     if settings.groq_api_key is None or not settings.groq_api_key.get_secret_value():
         raise RuntimeError("GROQ_API_KEY is required when LLM_PROVIDER=groq")
     return GroqProvider(

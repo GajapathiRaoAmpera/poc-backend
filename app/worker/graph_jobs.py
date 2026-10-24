@@ -165,12 +165,12 @@ async def _fail(w: "Worker", job: Job, project: Project, code: str, message: str
 
 
 async def _retry_or_fail(w, job, project, code, message, retryable) -> None:
-    from app.worker.runner import backoff_seconds
+    from app.worker.runner import retry_delay
 
     if not retryable or job.attempts >= job.max_attempts:
         await _fail(w, job, project, code, message)
         return
-    delay = backoff_seconds(job.attempts)
+    delay = retry_delay(code, job.attempts)
     await w.db.jobs.update_one(
         {"_id": job.id, "lease_owner": w.worker_id},
         {

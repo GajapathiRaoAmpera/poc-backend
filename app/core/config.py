@@ -18,11 +18,13 @@ class Settings(BaseSettings):
     trusted_proxy_ips: str = ""
 
     # LLM provider (agents). "mock" is for tests/offline demos and refused in production.
-    llm_provider: Literal["groq", "mock"] = "groq"
+    llm_provider: Literal["groq", "gemini", "mock"] = "groq"
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-120b"
     # Groq's per-request cap equals the account's tokens-per-minute limit (free tier: 8000).
     groq_max_input_tokens: int | None = 8000
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-2.5-flash"
     platform_daily_run_limit: int = 50
     agent_timeout_s: int = 180
 

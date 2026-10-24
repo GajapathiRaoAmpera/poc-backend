@@ -48,3 +48,20 @@ def test_groq_built_with_key_and_model():
         )
     )
     assert (p.name, p.model, p.is_mock) == ("groq", "openai/gpt-oss-20b", False)
+
+
+def test_gemini_requires_key():
+    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+        build_provider(_settings(environment="production", llm_provider="gemini"))
+
+
+def test_gemini_built_with_key_and_model():
+    p = build_provider(
+        _settings(
+            environment="production",
+            llm_provider="gemini",
+            gemini_api_key=SecretStr("k"),
+            gemini_model="gemini-2.5-pro",
+        )
+    )
+    assert (p.name, p.model, p.is_mock) == ("gemini", "gemini-2.5-pro", False)

@@ -8,6 +8,7 @@ from app.llm.base import ProviderError
 from app.llm.mock import MockProvider
 from app.modules.agents import base as agents
 from app.modules.artifacts import service as artifacts
+from app.modules.orchestration.models import AgentRun, Job
 from app.modules.orchestration.service import cancel_run, start_stage
 from app.worker.runner import Worker
 from tests.worker.conftest import add_spec
@@ -73,9 +74,30 @@ async def test_idle_returns_false(db):
     assert await make_worker(db).run_once() is False
 
 
+async def test_graph_run_job_is_completed_without_standalone_agent_lookup(db, project, owner):
+    run = AgentRun(
+        project_id=project.id,
+        owner_id=owner.id,
+        stage="orchestrator",
+        agent="project_orchestrator",
+        mode="generate",
+        graph_key=f"{project.id}:1:orchestrator",
+        created_by=owner.id,
+    )
+    job = Job(run_id=run.id, project_id=project.id)
+    await db.agent_runs.insert_one(run.to_doc())
+    await db.jobs.insert_one(job.to_doc())
+
+    assert await make_worker(db).run_once() is True
+
+    saved_job = await db.jobs.find_one({"_id": job.id})
+    assert saved_job["status"] == "DONE"
+    assert saved_job["last_error"] == "GRAPH_RUN_MISCLASSIFIED"
+
+
 async def test_retryable_error_requeues_with_backoff(db, project, owner, register):
     async def agent(ctx):
-        raise ProviderError("RATE_LIMITED", "slow down", retryable=True)
+        raise ProviderError("PROVIDER_ERROR", "try again", retryable=True)
 
     register(agent)
     run = await _run(db, project, owner)
