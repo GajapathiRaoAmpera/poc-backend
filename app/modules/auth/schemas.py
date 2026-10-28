@@ -64,3 +64,8 @@ class UserOut(BaseModel):
     status: UserStatus
     last_login_at: datetime | None
     created_at: datetime
+
+
+class TokenOut(BaseModel):
+    token: str
+    user: UserOut
