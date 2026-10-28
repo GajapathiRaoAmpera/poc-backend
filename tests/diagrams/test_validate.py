@@ -34,7 +34,8 @@ def test_duplicate_node_ids():
 def test_edge_to_unknown_node():
     c = content(lambda d: d["edges"].append({**d["edges"][0], "id": "e_x", "target": "n_ghost"}))
     issues = validate_structure(c)
-    assert "UNKNOWN_NODE" in codes(issues) and "n_ghost" in issues[0].message
+    assert "UNKNOWN_NODE" in codes(issues) and "no longer exists" in issues[0].message
+    assert "n_ghost" not in issues[0].message and issues[0].refs == ["e_x", "n_ghost"]
 
 
 def test_self_loop():

@@ -65,7 +65,8 @@ async def test_dangling_edge_three_times_fails_with_readable_error(db):
     )
     _, _, doc = await run_stage(db, project, owner, "architecture", lambda *a: copy.deepcopy(bad))
     assert doc["status"] == "FAILED" and doc["error"]["code"] == "OUTPUT_INVALID"
-    assert "n_cache" in doc["error"]["message"]
+    assert "API points to a component that no longer exists" in doc["error"]["message"]
+    assert "n_" not in doc["error"]["message"]
     assert await db.artifact_revisions.count_documents({"kind": "architecture"}) == 0
 
 

@@ -13,7 +13,9 @@ Diagram rules:
   only (requirement_ids). Every MUST requirement must be linked at least once.
 - Prefer a modular monolith plus background workers unless requirements justify more services.
 - Include authentication if users sign in, and a monitoring component.
-- "summary" is one or two sentences on the key decisions; no step-by-step reasoning."""
+- "summary" is one or two sentences on the key decisions; no step-by-step reasoning.
+- In "summary" and any other prose, name components by their label (e.g. "Redis cache"), never
+  by ID (e.g. "n_redis")."""
 
 GENERATE_SYSTEM = f"""You are the Solution Architect. Design a system architecture for the approved
 requirements and return it as a structured diagram with architecture decision records (ADRs)

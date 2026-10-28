@@ -22,6 +22,8 @@ class DiagramDiff(BaseModel):
     groups: Section
     decisions: Section
     notes: Section
+    # id -> human name, so clients never show raw ids like n_redis
+    labels: dict[str, str] = {}
 
 
 class Impact(BaseModel):
@@ -29,6 +31,22 @@ class Impact(BaseModel):
     removed: list[str]
     modified: list[str]
     requirement_ids: list[str]
+    labels: dict[str, str] = {}
+
+
+def labels(*contents: ArchitectureContent) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for c in contents:
+        out.update({n.id: n.label for n in c.nodes})
+        out.update({g.id: g.label for g in c.groups})
+        out.update({d.id: f"{d.id} {d.title}".strip() for d in c.decisions})
+        out.update({n.id: f"Note “{n.text[:40]}”" for n in c.notes})
+    for c in contents:
+        for e in c.edges:
+            gone = "a removed component"
+            ends = f"{out.get(e.source, gone)} → {out.get(e.target, gone)}"
+            out[e.id] = f"{ends} ({e.label})" if e.label else ends
+    return out
 
 
 def _section(a: list, b: list, ignore: set[str]) -> Section:
@@ -61,6 +79,7 @@ def diff(
         groups=_section(a.groups, b.groups, set()),
         decisions=_section(a.decisions, b.decisions, set()),
         notes=_section(a.notes, b.notes, layout),
+        labels=labels(a, b),
     )
 
 
@@ -78,4 +97,10 @@ def impact(base: ArchitectureContent, result: ArchitectureContent) -> Impact:
         for item in getattr(result, collection):
             if item.id in added or item.id in modified:
                 reqs.update(item.requirement_ids)
-    return Impact(added=added, removed=removed, modified=modified, requirement_ids=sorted(reqs))
+    return Impact(
+        added=added,
+        removed=removed,
+        modified=modified,
+        requirement_ids=sorted(reqs),
+        labels=labels(base, result),
+    )

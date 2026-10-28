@@ -23,6 +23,8 @@ class ValidationIssue(BaseModel):
     code: str
     message: str
     path: str | None = None
+    # ids of the diagram items the issue is about; messages use names, so clients match on this
+    refs: list[str] = []
 
 
 class ValidationResult(BaseModel):

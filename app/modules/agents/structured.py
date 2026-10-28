@@ -39,7 +39,9 @@ def _previous_budget(ctx: AgentContext, system: str, schema: dict, user: str) ->
 def _repair_prompt(
     user: str, previous: dict, issues: list[ValidationIssue], budget: int = MAX_PREVIOUS_CHARS
 ) -> str:
-    listed = "\n".join(f"- {i.message}" for i in issues[:20])
+    listed = "\n".join(
+        f"- {i.message}" + (f" (ids: {', '.join(i.refs)})" if i.refs else "") for i in issues[:20]
+    )
     return (
         f"{user}\n\n<previous_output>\n{json.dumps(previous)[:budget]}\n</previous_output>\n"
         f"<validation_errors>\n{listed}\n</validation_errors>\n"

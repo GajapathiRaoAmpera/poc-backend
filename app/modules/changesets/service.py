@@ -47,7 +47,14 @@ async def create_change_set(
             status = "INVALID"
     except OpError as exc:
         status = "INVALID"
-        issues = [ValidationIssue(severity="error", code="INVALID_OP", message=str(exc))]
+        issues = [
+            ValidationIssue(
+                severity="error",
+                code="INVALID_OP",
+                message=str(exc),
+                refs=[exc.ref] if exc.ref else [],
+            )
+        ]
     cs = ChangeSet(
         project_id=project.id,
         owner_id=project.owner_id,

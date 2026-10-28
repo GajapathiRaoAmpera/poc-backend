@@ -75,7 +75,7 @@ async def test_save_with_dangling_edge_is_422(owner_client, with_architecture):
         f"{base}/artifacts/architecture/revisions",
         json={"base_revision": 1, "content": content, "summary": "x"},
     )
-    assert r.status_code == 422 and "n_ghost" in r.json()["error"]["message"]
+    assert r.status_code == 422 and "no longer exists" in r.json()["error"]["message"]
 
 
 async def test_validate_endpoint_does_not_write(owner_client, with_architecture):

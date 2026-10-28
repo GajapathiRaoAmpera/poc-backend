@@ -9,12 +9,30 @@ AUTH_HINT = re.compile(
 )
 
 
-def _e(code, message, path=None):
-    return ValidationIssue(severity="error", code=code, message=message, path=path)
+def _e(code, message, path=None, refs=()):
+    return ValidationIssue(severity="error", code=code, message=message, path=path, refs=list(refs))
 
 
-def _w(code, message, path=None):
-    return ValidationIssue(severity="warning", code=code, message=message, path=path)
+def _w(code, message, path=None, refs=()):
+    return ValidationIssue(
+        severity="warning", code=code, message=message, path=path, refs=list(refs)
+    )
+
+
+def _name(c: ArchitectureContent, node_id: str) -> str:
+    return next((n.label for n in c.nodes if n.id == node_id), "a removed component")
+
+
+def _edge(c: ArchitectureContent, e) -> str:
+    return f"{_name(c, e.source)} → {_name(c, e.target)}"
+
+
+def _item(c: ArchitectureContent, kind: str, item) -> str:
+    if kind == "nodes":
+        return item.label
+    if kind == "edges":
+        return f"Connection {_edge(c, item)}"
+    return f"{item.id} {item.title}"
 
 
 def validate_structure(c: ArchitectureContent) -> list[ValidationIssue]:
@@ -29,24 +47,45 @@ def validate_structure(c: ArchitectureContent) -> list[ValidationIssue]:
     ):
         for item_id, n in Counter(i.id for i in items).items():
             if n > 1:
-                out.append(_e("DUPLICATE_ID", f"Duplicate ID {item_id} in {name}", name))
+                out.append(
+                    _e(
+                        "DUPLICATE_ID",
+                        f"Two {name} have the same internal ID; remove one of them",
+                        name,
+                        [item_id],
+                    )
+                )
     node_ids = {n.id for n in c.nodes}
     group_ids = {g.id for g in c.groups}
     for i, e in enumerate(c.edges):
         for end in (e.source, e.target):
             if end not in node_ids:
                 out.append(
-                    _e("UNKNOWN_NODE", f"Edge {e.id} references unknown node {end}", f"edges.{i}")
+                    _e(
+                        "UNKNOWN_NODE",
+                        f"A connection from {_name(c, e.source if end == e.target else e.target)} "
+                        "points to a component that no longer exists",
+                        f"edges.{i}",
+                        [e.id, end],
+                    )
                 )
         if e.source == e.target:
-            out.append(_e("SELF_LOOP", f"Edge {e.id} connects {e.source} to itself", f"edges.{i}"))
+            out.append(
+                _e(
+                    "SELF_LOOP",
+                    f"{_name(c, e.source)} is connected to itself",
+                    f"edges.{i}",
+                    [e.id, e.source],
+                )
+            )
     for i, n in enumerate(c.nodes):
         if n.group is not None and n.group not in group_ids:
             out.append(
                 _e(
                     "UNKNOWN_GROUP",
-                    f"Node {n.id} is in unknown group {n.group}",
+                    f"{n.label} is in a group that no longer exists",
                     f"nodes.{i}.group",
+                    [n.id],
                 )
             )
     return out
@@ -69,8 +108,10 @@ def validate_semantics(
                     out.append(
                         _e(
                             "UNKNOWN_REQUIREMENT",
-                            f"{item.id} references {rid}, which isn't in the approved requirements",
+                            f"{_item(c, kind, item)} references {rid}, which isn't in the "
+                            "approved requirements",
                             f"{kind}.{i}.requirement_ids",
+                            [item.id],
                         )
                     )
     for rid in sorted(must_ids - cited):
@@ -84,7 +125,7 @@ def validate_semantics(
     connected = {e.source for e in c.edges} | {e.target for e in c.edges}
     for i, n in enumerate(c.nodes):
         if n.id not in connected and len(c.nodes) > 1:
-            out.append(_w("ISOLATED_NODE", f"{n.label} ({n.id}) has no connections", f"nodes.{i}"))
+            out.append(_w("ISOLATED_NODE", f"{n.label} has no connections", f"nodes.{i}", [n.id]))
     types = {n.type for n in c.nodes}
     if "auth" not in types and any(AUTH_HINT.search(t) for t in requirement_texts):
         out.append(

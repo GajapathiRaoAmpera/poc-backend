@@ -38,3 +38,11 @@ def test_impact_lists_requirements():
     after = apply_ops(BASE, parse_ops([{"op": "remove_node", "id": "n_web"}]))
     imp = impact(BASE, after)
     assert imp.removed == ["n_web", "e_web_api"] and imp.requirement_ids == ["FR-001"]
+
+
+def test_diff_and_impact_carry_readable_labels():
+    after = apply_ops(BASE, parse_ops([{"op": "remove_node", "id": "n_web"}]))
+    labels = impact(BASE, after).labels
+    assert labels["n_web"] == BASE.nodes[0].label  # removed items keep their name
+    assert labels["e_web_api"] == f"{BASE.nodes[0].label} → API (REST)"
+    assert diff(BASE, after).labels == labels

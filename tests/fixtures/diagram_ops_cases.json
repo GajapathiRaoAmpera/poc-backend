@@ -45,18 +45,18 @@
     {
       "name": "unknown node id is an error",
       "ops": [{"op": "update_node", "id": "n_missing", "fields": {"label": "x"}}],
-      "error": {"index": 0, "contains": "n_missing"}
+      "error": {"index": 0, "contains": "isn't in the diagram"}
     },
     {
       "name": "duplicate node id is an error",
       "ops": [{"op": "add_node", "node": {"id": "n_api", "type": "service", "label": "Dup", "description": "", "technology": "",
                "responsibilities": [], "config": {}, "requirement_ids": [], "position": {"x": 0, "y": 0}, "group": null}}],
-      "error": {"index": 0, "contains": "already exists"}
+      "error": {"index": 0, "contains": "already in the diagram"}
     },
     {
       "name": "edge to unknown node is an error",
       "ops": [{"op": "add_edge", "edge": {"id": "e_bad", "source": "n_api", "target": "n_nope", "label": "", "protocol": null, "data": null, "requirement_ids": []}}],
-      "error": {"index": 0, "contains": "n_nope"}
+      "error": {"index": 0, "contains": "isn't in the diagram"}
     }
   ]
 }

@@ -4,15 +4,19 @@ from app.modules.agents.budget.schema import BudgetAgentOutput
 from app.modules.artifacts.models import ValidationIssue
 
 
-def _err(code: str, message: str) -> ValidationIssue:
-    return ValidationIssue(severity="error", code=code, message=message)
+def _err(code: str, message: str, refs: list[str] | None = None) -> ValidationIssue:
+    return ValidationIssue(severity="error", code=code, message=message, refs=refs or [])
 
 
 def budget_issues(
     out: BudgetAgentOutput, component_ids: set[str], risk_ids: set[str]
 ) -> list[ValidationIssue]:
     issues = [
-        _err("UNKNOWN_REF", f"Item '{i.description}' references unknown component {i.component_id}")
+        _err(
+            "UNKNOWN_REF",
+            f"Item '{i.description}' is linked to a component that isn't in the architecture",
+            [i.component_id],
+        )
         for i in out.items
         if i.component_id is not None and i.component_id not in component_ids
     ]

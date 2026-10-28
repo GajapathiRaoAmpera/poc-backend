@@ -75,7 +75,14 @@ async def run(ctx: AgentContext, req_ref, reqs: dict) -> AgentOutcome:
         try:
             return validate_structure(apply_ops(base_content, o.ops))
         except OpError as exc:
-            return [ValidationIssue(severity="error", code="INVALID_OP", message=str(exc))]
+            return [
+                ValidationIssue(
+                    severity="error",
+                    code="INVALID_OP",
+                    message=str(exc),
+                    refs=[exc.ref] if exc.ref else [],
+                )
+            ]
 
     out, usage = await call_structured(
         ctx,
