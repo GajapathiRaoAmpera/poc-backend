@@ -102,4 +102,6 @@ async def _announce(db: Db, project_id: uuid.UUID, status: str, pending, text: s
     if last and last["role"] == "system" and last["text"] == text:
         return  # a re-check that ends where it started says nothing new
     project = Project.from_doc(await db.projects.find_one({"_id": project_id}))
-    await add_message(db, project, channel, "system", text, refs={"gate": kind} if kind else None)
+    # Clients style the notice by gate (failure vs. action needed vs. done).
+    gate = kind or {"FAILED": "failed", "DONE": "done"}.get(status)
+    await add_message(db, project, channel, "system", text, refs={"gate": gate} if gate else None)
