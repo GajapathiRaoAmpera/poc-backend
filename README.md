@@ -86,6 +86,9 @@ Design: [`docs/specs/2026-10-27-c2-plan-budget-design.md`](docs/specs/2026-10-27
   `GET/PUT /api/v1/admin/rate-card`; a project can override them (`/api/v1/projects/{id}/rate-card`).
   The default is seeded on startup, by `init-db`, or on first read. **The seeded rates are placeholders**
   (USD, 8 h/day): replace them with real rates before relying on budgets.
+- You can adjust the schedule on the timeline (drag a task later, resize it, or set exact values):
+  `POST /api/v1/projects/{id}/plan/edits` stores "start no earlier than" dates and effort, then
+  recomputes the schedule in code and saves a new revision for approval.
 - A rate change reprices the budget without an LLM call; a team-size or start-date change reschedules the
   plan without one. Requirements or architecture changes mark the plan, then the budget, stale.
 

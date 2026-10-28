@@ -47,7 +47,7 @@ C3 (scaffold script) follows in its own spec and reads the approved plan.
 project override), Preferences fields `start_date` and `team_size`, Plan and Budget pages,
 admin rate card page, graph/policy wiring.
 
-**Out:** editing tasks by hand (changes go through chat), Gantt drag, PDF/CSV export, multiple
+**Out:** editing task titles and dependencies by hand (changes go through chat), PDF/CSV export, multiple
 currencies or FX, tracking actual costs, C3.
 
 ## 3. Plan Agent (`app/modules/agents/plan/`, agent `project_planner`, stage `plan`)
@@ -86,6 +86,13 @@ risks: [{id: "R-01", description (≤300), impact: low|medium|high, mitigation (
 - Output added to the stored content: `schedule {start, end, working_days}`, each task's
   `start`/`end`, and each milestone's `start`/`end` (min/max of its tasks).
 - **Warning** (not an error): `end` is after preferences `target_delivery_date`.
+- **Timeline edits (added 2026-10-28):** a person can drag a bar later or resize it on the Plan page
+  (or use the keyboard or the "Adjust" dialog). `POST /projects/{id}/plan/edits`
+  `{base_revision, edits: [{task_id, not_before?, effort_days?}]}` stores a task's `not_before`
+  ("start no earlier than") and effort, recomputes the schedule in code (no LLM) and saves a `user`
+  revision. The scheduler never starts a task before its `not_before`; dependencies and team size
+  still apply. `schedule.start` is always the plan's start date. Chat revisions keep the pins of tasks
+  that still exist.
 - `reschedule` mode: `team_size` or `start_date` changed but the tasks did not. Copy the
   latest revision's tasks, recompute the schedule, and save a new revision (origin `system`,
   summary "Rescheduled with updated team or start date"). No LLM call.
