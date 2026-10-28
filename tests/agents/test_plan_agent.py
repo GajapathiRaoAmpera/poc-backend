@@ -169,3 +169,30 @@ async def test_reschedule_with_invalid_stored_plan_regenerates(db):
     assert len(provider.calls) == 1 and "Dependency cycle" in provider.calls[0]["user"]
     rev = await artifacts.get_revision(db, project, "plan", 2)
     assert rev.origin == "agent" and rev.validation.ok
+
+
+async def test_chat_revise_keeps_timeline_pins(db):
+    from app.modules.agents.plan.edits import TaskEdit, apply_edits
+    from app.modules.agents.plan.schema import PlanContent
+
+    owner, project = await ready(db)
+    await run_stage(db, project, owner, "plan", lambda *a: plan())
+    first = await artifacts.get_revision(db, project, "plan", 1)
+    pinned = apply_edits(
+        PlanContent.model_validate(first.content),
+        [TaskEdit(task_id="T-001", not_before="2030-01-07")],
+        {},
+    )
+    await artifacts.add_revision(
+        db, project, "plan", pinned.model_dump(mode="json"), sources=first.sources, origin="user",
+        summary="pin", created_by=owner.id, base_revision=1,
+    )  # fmt: skip
+    replies = [{"reply": "Revising.", "action": "revise", "instruction": "x"}, plan(summary="R")]
+    _, _, doc = await run_stage(
+        db, project, owner, "plan", lambda *a: copy.deepcopy(replies.pop(0)),
+        mode="chat", instruction="tweak",
+    )  # fmt: skip
+    assert doc["status"] == "SUCCEEDED", doc.get("error")
+    rev = await artifacts.get_revision(db, project, "plan", 3)
+    task = next(t for t in rev.content["tasks"] if t["id"] == "T-001")
+    assert task["not_before"] == "2030-01-07" and task["start"] >= "2030-01-07"

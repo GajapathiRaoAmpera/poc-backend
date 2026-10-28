@@ -106,3 +106,28 @@ def test_effort_validation():
         _plan(("T-001", 1.3, "a", [], "M-01"))
     with pytest.raises(ValidationError):
         _plan(("T-001", 20.5, "a", [], "M-01"))
+
+
+def test_not_before_delays_task_and_its_dependents():
+    p = _plan(("T-001", 2, "a", [], "M-01"), ("T-002", 1, "b", ["T-001"], "M-01"))
+    p.tasks[0].not_before = date(2026, 11, 7)  # a Saturday: rolls to Monday
+    c = compute_schedule(p, MON, {}, None)
+    assert _dates(c) == {
+        "T-001": (date(2026, 11, 9), date(2026, 11, 10)),
+        "T-002": (date(2026, 11, 11), date(2026, 11, 11)),
+    }
+    assert c.tasks[0].not_before == date(2026, 11, 7)
+
+
+def test_not_before_earlier_than_dependencies_is_ignored():
+    p = _plan(("T-001", 3, "a", [], "M-01"), ("T-002", 1, "b", ["T-001"], "M-01"))
+    p.tasks[1].not_before = MON
+    assert _dates(compute_schedule(p, MON, {}, None))["T-002"][0] == date(2026, 11, 5)
+
+
+def test_schedule_start_stays_on_the_start_date_when_the_first_task_is_pinned():
+    p = _plan(("T-001", 1, "a", [], "M-01"))
+    p.tasks[0].not_before = date(2026, 11, 9)
+    c = compute_schedule(p, MON, {}, None)
+    assert c.schedule.start == MON and c.tasks[0].start == date(2026, 11, 9)
+    assert c.schedule.working_days == 6

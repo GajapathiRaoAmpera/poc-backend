@@ -30,6 +30,8 @@ class Task(_M):
     component_ids: Annotated[
         list[Annotated[str, StringConstraints(max_length=60)]], Field(max_length=30)
     ] = []
+    # Set by a person on the timeline ("start no earlier than"); the scheduler respects it.
+    not_before: date | None = None
 
     @field_validator("effort_days")
     @classmethod

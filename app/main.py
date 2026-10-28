@@ -9,6 +9,7 @@ from app.core.db import close_client, database, ensure_indexes
 from app.core.errors import install_error_handlers
 from app.core.origin import OriginCheckMiddleware
 from app.modules.agents import load_all
+from app.modules.agents.plan.edits import router as plan_edits_router
 from app.modules.artifacts.router import router as artifacts_router
 from app.modules.auth.router import router as auth_router
 from app.modules.changesets.router import router as changesets_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     api.include_router(ratecard_admin_router)
     api.include_router(ratecard_router)
     api.include_router(artifacts_router)
+    api.include_router(plan_edits_router)
     api.include_router(changesets_router)
     api.include_router(conversations_router)
     app.include_router(api)

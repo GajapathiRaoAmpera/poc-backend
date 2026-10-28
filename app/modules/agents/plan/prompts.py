@@ -9,7 +9,7 @@ Plan rules:
   of 0.5, depends_on (task IDs that must finish first; no cycles), requirement_ids and
   component_ids taken from the lists given.
 - Every MUST requirement must be covered by at least one task.
-- Do not give dates: the schedule is computed for you.
+- Do not give dates and leave not_before null: the schedule is computed for you.
 - "summary" is one or two sentences; no step-by-step reasoning."""
 
 GENERATE_SYSTEM = f"""You are the Project Planner. Break the approved requirements and

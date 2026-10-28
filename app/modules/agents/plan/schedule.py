@@ -51,7 +51,7 @@ def compute_schedule(
         k = min(range(len(role_slots)), key=lambda i: (role_slots[i] or date.min, i))
         floor = [ends[d] for d in t.depends_on] + ([role_slots[k]] if role_slots[k] else [])
         s = _roll(_add_wd(max(floor), 1)) if floor else first
-        s = max(s, first)
+        s = max(s, first, _roll(t.not_before) if t.not_before else first)
         e = _add_wd(s, math.ceil(t.effort_days) - 1)
         role_slots[k] = ends[t.id] = e
         scheduled[t.id] = ScheduledTask(**t.model_dump(), start=s, end=e)
@@ -62,7 +62,8 @@ def compute_schedule(
     if len(scheduled) != len(by_id):
         raise ValueError("Dependency cycle or unknown dependency")
     tasks = [scheduled[t.id] for t in out.tasks]
-    p_start = min(t.start for t in tasks)
+    # Starts on the start date even if a pinned first task begins later; edits anchor on it.
+    p_start = first
     p_end = max(t.end for t in tasks)
     milestones = []
     for m in out.milestones:

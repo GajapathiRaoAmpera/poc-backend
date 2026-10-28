@@ -107,6 +107,14 @@ async def generate(ctx: AgentContext, ins: Inputs) -> AgentOutcome:
         validate=lambda o: plan_issues(o, req_ids, must, comps, ins.roles),
         max_output_tokens=12000,
     )
+    if current:  # keep the client's timeline pins on tasks that survive the revision
+        pins = {
+            t["id"]: date.fromisoformat(t["not_before"])
+            for t in current["tasks"]
+            if t.get("not_before")
+        }
+        tasks = [t.model_copy(update={"not_before": pins.get(t.id)}) for t in out.tasks]
+        out = out.model_copy(update={"tasks": tasks})
     content = compute_schedule(out, *ins.schedule_args)
     output = await _save(ctx, content, [ins.req_ref, ins.arch_ref], "agent", out.summary)
     return AgentOutcome(output=output, summary=out.summary, usage=usage)
