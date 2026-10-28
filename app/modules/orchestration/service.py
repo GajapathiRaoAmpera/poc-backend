@@ -81,6 +81,18 @@ async def _resolve_inputs(
             elif mode == "reprice":
                 raise StageBlocked(["There is no budget to reprice yet"])
         return inputs
+    if stage == "code":
+        inputs = []
+        for kind in ("architecture", "plan"):
+            art = await artifacts.get_artifact(db, project, kind)
+            inputs.append(SourceRef(kind=kind, artifact_id=art.id, revision=art.approved_revision))
+        if mode == "chat":
+            art = await artifacts.get_artifact(db, project, "code")
+            if art is not None and art.latest_revision:
+                inputs.append(
+                    SourceRef(kind="code", artifact_id=art.id, revision=art.latest_revision)
+                )
+        return inputs
     req = await artifacts.get_artifact(db, project, "requirements")
     inputs = [SourceRef(kind="requirements", artifact_id=req.id, revision=req.approved_revision)]
     if mode == "chat":

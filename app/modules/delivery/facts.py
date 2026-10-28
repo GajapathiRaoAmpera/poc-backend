@@ -13,7 +13,7 @@ from app.core.db import Db
 from app.modules.artifacts import service as artifacts
 from app.modules.projects.models import Project
 
-ARTIFACT_STAGES = ("requirements", "architecture", "plan", "budget")
+ARTIFACT_STAGES = ("requirements", "architecture", "plan", "budget", "code")
 # Stages whose stale draft can be refreshed without the LLM when only their inputs' numbers moved.
 UPSTREAM = {"plan": ("requirements", "architecture"), "budget": ("plan", "architecture")}
 MAX_DIGEST = 4000

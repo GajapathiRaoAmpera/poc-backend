@@ -71,7 +71,7 @@ async def test_resume_after_approval_runs_architecture(db, harness):
 def _without_plan_and_budget(system, user):
     out = default_output("orchestrator_output", system, user)
     for s in out["content"]["stages"]:
-        if s["stage"] in ("plan", "budget"):
+        if s["stage"] in ("plan", "budget", "code"):
             s.update(include=False, inputs=[], approval_required=False)
     return out
 

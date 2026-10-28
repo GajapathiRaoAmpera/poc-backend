@@ -21,6 +21,7 @@ AGENT_LABEL = {
     "architecture": "Architecture Agent",
     "plan": "Plan Agent",
     "budget": "Budget Agent",
+    "code": "Development Agent",
 }
 
 

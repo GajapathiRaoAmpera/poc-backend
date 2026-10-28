@@ -102,7 +102,7 @@ async def test_stale_overrides(db, project, owner):
     assert s.status == "STALE" and "Specification changed" in s.reasons[0]
 
 
-async def test_workflow_lists_all_stages_with_unavailable(db, project):
+async def test_workflow_lists_all_stages(db, project):
     stages = await workflow(db, project)
     assert [s.stage for s in stages] == ["requirements", "architecture", "plan", "budget", "code"]
-    assert [s.status for s in stages][2:] == ["BLOCKED", "BLOCKED", "UNAVAILABLE"]
+    assert [s.status for s in stages][2:] == ["BLOCKED", "BLOCKED", "BLOCKED"]

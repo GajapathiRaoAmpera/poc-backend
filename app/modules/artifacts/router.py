@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from pydantic import BaseModel, Field, StringConstraints
 
 from app.core.deps import CurrentUser, DbSession
@@ -27,7 +27,7 @@ from app.modules.orchestration.schemas import (
 from app.modules.orchestration.stages import dependency_blockers
 from app.modules.projects.service import get_project_for
 
-Kind = Literal["requirements", "architecture", "plan", "budget"]
+Kind = Literal["requirements", "architecture", "plan", "budget", "code"]
 router = APIRouter(prefix="/projects/{project_id}", tags=["artifacts"])
 
 
@@ -87,6 +87,27 @@ async def get_revision(
 ) -> RevisionOut:
     project = await get_project_for(db, user, project_id)
     return revision_out(await service.get_revision(db, project, kind, n))
+
+
+@router.get("/artifacts/code/revisions/{n}/script")
+async def download_script(project_id: uuid.UUID, n: int, user: CurrentUser, db: DbSession):
+    """The scaffold script, rendered from the stored manifest. Never executed by the platform."""
+    from app.modules.agents.code.render import render, sha256
+    from app.modules.agents.code.schema import CodeContent
+
+    project = await get_project_for(db, user, project_id)
+    rev = await service.get_revision(db, project, "code", n)
+    content = CodeContent.model_validate(rev.content)
+    script = render(content, {s.kind: s.revision for s in rev.sources})
+    name = f"scaffold-{content.project_slug}-r{n}.sh"
+    return Response(
+        script,
+        media_type="text/x-shellscript; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "X-Content-SHA256": sha256(script),
+        },
+    )
 
 
 async def _sources_for_new_revision(db, project, kind: str) -> list[SourceRef]:

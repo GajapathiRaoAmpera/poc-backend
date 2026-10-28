@@ -9,7 +9,7 @@ from app.modules.delivery.facts import Facts, StageFacts
 
 MAX_AUTO_RUNS = 3
 
-Node = Literal["requirements", "architecture", "plan", "budget", "gate", "end"]
+Node = Literal["requirements", "architecture", "plan", "budget", "code", "gate", "end"]
 NO_RATES = "Set rates before the budget can be calculated"
 
 

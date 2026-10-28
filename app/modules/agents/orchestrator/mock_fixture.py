@@ -43,7 +43,7 @@ def orchestrator_output(system: str, user: str) -> dict:
                 stage("architecture", ["requirements"]),
                 stage("plan", ["requirements", "architecture"]),
                 stage("budget", ["plan", "architecture"]),
-                stage("code", [], False),
+                stage("code", ["architecture", "plan"]),
             ],
             "missing_info": [
                 {

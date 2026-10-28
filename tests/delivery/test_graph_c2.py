@@ -54,7 +54,7 @@ async def _worker_flow(db, stop_at=None):
     w = Worker(db, provider_factory=lambda: provider, heartbeat_s=0.05, poll_s=0.01)
     await delivery.start_delivery(db, project, owner)
     await w.run_once()
-    for stage in ("requirements", "architecture", "plan", "budget"):
+    for stage in ("requirements", "architecture", "plan", "budget", "code"):
         if stage == stop_at:
             break
         t = await get_thread(db, project)
@@ -107,7 +107,7 @@ async def test_rates_change_reprices(db, harness):
     owner, project, h = await _ready(db, harness)
     await _to_budget(db, h, owner, project)
     await artifacts.approve(db, project, "budget", 1, owner, None)
-    assert await h.resume("approved:budget") is None
+    assert await h.resume("approved:budget") == approval("code")
     calls = len(h.provider.calls)
     await _new_rates(db, project, owner)
     assert await h.start("rates_changed") == approval("budget", 2)
@@ -122,6 +122,8 @@ async def test_rates_reverted_is_not_work(db, harness):
     await _to_budget(db, h, owner, project)
     await artifacts.approve(db, project, "budget", 1, owner, None)
     await h.resume("approved:budget")
+    await artifacts.approve(db, project, "code", 1, owner, None)
+    await h.resume("approved:code")
     await _new_rates(db, project, owner)  # stale: "Rates changed"
     await save_override(db, project, owner, None)  # back to the default the budget used
     assert await h.start("rates_changed") is None

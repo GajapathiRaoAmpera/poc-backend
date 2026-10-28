@@ -53,7 +53,7 @@ A project starts from one sentence (`POST /api/v1/projects/intake`). Each projec
 and checkpointed to MongoDB (`graph_checkpoints`, `graph_checkpoint_writes`):
 
 ```
-START → orchestrator ⇄ requirements | architecture | plan | budget | gate (interrupt) → END
+START → orchestrator ⇄ requirements | architecture | plan | budget | code | gate (interrupt) → END
 ```
 
 - The **Project Orchestrator Agent** (`agents/orchestrator/`) turns the idea and the current state
@@ -89,6 +89,21 @@ Design: [`docs/specs/2026-10-27-c2-plan-budget-design.md`](docs/specs/2026-10-27
 - A rate change reprices the budget without an LLM call; a team-size or start-date change reschedules the
   plan without one. Requirements or architecture changes mark the plan, then the budget, stale.
 
+## Scaffold script (C3)
+
+Design: [`docs/specs/2026-10-28-c3-scaffold-design.md`](docs/specs/2026-10-28-c3-scaffold-design.md)
+
+- After the plan (and budget) are approved, the **Development Agent** (`agents/code/`, stage `code`)
+  returns a file manifest. Code checks it (relative paths only, no `..`/`.git`, no `.env`/keys, size
+  limits), adds `PLAN.md` from the approved plan, and renders **one bash script** that only writes files.
+- **Validation** is static: `bash -n` and `shellcheck -S warning` read the script and every shell file
+  from stdin. **The platform never executes generated code.** Findings block approval; a missing
+  shellcheck fails closed (`VALIDATOR_UNAVAILABLE`). `shellcheck-py` (a normal dependency) ships the binary.
+- **Repair** sends only the failing files and their findings back to the agent, at most 2 rounds.
+- Download: `GET /api/v1/projects/{id}/artifacts/code/revisions/{n}/script` (owner only; rendered from the
+  stored manifest; `X-Content-SHA256`). The script refuses a non-empty target directory.
+- Architecture or plan changes mark the scaffold stale; rate changes do not.
+
 ## Test
 
 Tests use a throwaway local MongoDB replica set (`mongo:9.0` — 8.x refuses to start on Linux kernels ≥ 6.19) and never touch Atlas: they ignore `MONGODB_URI` and refuse to run unless `TEST_MONGODB_URI` (default `mongodb://localhost:27018`) is local and `TEST_MONGODB_DB` (default `ampera_test`) ends in `_test`.
@@ -103,8 +118,9 @@ uv run ruff check .
 
 - **Password reset email:** no email provider is configured. In `development` the reset link is
   written to the server log; in other environments the request is accepted but nothing is sent.
-- **Agents available:** Project Orchestrator, Requirements, Architecture, Planning and Budget.
-  Development, Validation and Repair agents are planned (C3) and shown as unavailable.
+- **Agents available:** Project Orchestrator, Requirements, Architecture, Planning, Budget and
+  Development (scaffold script with static validation and repair). Nothing generated is run or
+  tested beyond `bash -n` and shellcheck: whether `npm install` etc. succeed is not checked.
 - **Checkpointer:** the official `MongoDBSaver` uses a synchronous client in a thread pool (one
   extra MongoDB connection pool per worker).
 - **Login throttling** is per email + IP (`login_attempts`, auto-deleted after 24 h by a TTL index).

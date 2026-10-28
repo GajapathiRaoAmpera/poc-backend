@@ -132,9 +132,9 @@ async def test_invalid_plan_falls_back(db):
     assert len(provider.calls) == 2  # one repair
     assert plan.fallback is True
     codes = {i.code for i in plan.validation.issues}
-    assert {"APPROVAL_REQUIRED", "UNAVAILABLE_AGENT"} <= codes
+    assert {"APPROVAL_REQUIRED", "ORDER"} <= codes
     included = {s["stage"] for s in plan.content["stages"] if s["include"]}
-    assert included == {"requirements", "architecture", "plan", "budget"}
+    assert included == {"requirements", "architecture", "plan", "budget", "code"}
     assert any("Default plan" in m for _, m in events)
 
 

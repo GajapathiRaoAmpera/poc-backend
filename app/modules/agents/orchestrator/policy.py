@@ -5,14 +5,14 @@ from app.modules.artifacts.models import ValidationIssue
 from app.modules.delivery.facts import Facts
 from app.modules.projects.spec_schema import ProjectSpecification
 
-IMPLEMENTED = {"requirements", "architecture", "plan", "budget"}
+IMPLEMENTED = {"requirements", "architecture", "plan", "budget", "code"}
 ORDER = ["requirements", "architecture", "plan", "budget", "code"]
-REQUIRED_APPROVAL = {"requirements", "architecture", "plan", "budget"}
+REQUIRED_APPROVAL = {"requirements", "architecture", "plan", "budget", "code"}
 DEPENDS_ON = {
     "architecture": ["requirements"],
     "plan": ["requirements", "architecture"],
     "budget": ["plan", "architecture"],
-    "code": ["architecture"],
+    "code": ["architecture", "plan"],
 }
 MAX_QUESTIONS = 7
 # What actually reaches the client per turn, and how many answered rounds before it must proceed.

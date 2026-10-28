@@ -36,6 +36,7 @@ AGENT_FOR = {
     "architecture": "solution_architect",
     "plan": "project_planner",
     "budget": "budget_estimator",
+    "code": "developer",
 }
 LABEL = {
     "orchestrator": "Project Orchestrator",
@@ -43,6 +44,7 @@ LABEL = {
     "architecture": "Architecture Agent",
     "plan": "Plan Agent",
     "budget": "Budget Agent",
+    "code": "Development Agent",
 }
 
 

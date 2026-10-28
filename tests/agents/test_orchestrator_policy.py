@@ -54,9 +54,9 @@ def test_valid_plan_has_no_issues():
     assert codes(plan()) == set()
 
 
-def test_unavailable_agent_included():
+def test_code_requires_architecture_and_plan():
     p = plan(stages=[stage("requirements"), stage("code", inputs=["requirements"])])
-    assert "UNAVAILABLE_AGENT" in codes(p)
+    assert "ORDER" in codes(p)
 
 
 def test_unavailable_agent_excluded_is_fine():
@@ -129,7 +129,7 @@ def test_default_plan_passes_policy():
 def test_default_plan_includes_all_implemented_with_approval():
     p = default_plan(facts(), None)
     included = {s.stage: s for s in p.stages if s.include}
-    assert list(included) == ["requirements", "architecture", "plan", "budget"]
+    assert list(included) == ["requirements", "architecture", "plan", "budget", "code"]
     assert all(s.approval_required for s in included.values())
     assert p.next_stage == "requirements"
 

@@ -19,6 +19,7 @@ STAGE_LABEL = {
     "architecture": "architecture",
     "plan": "plan",
     "budget": "budget",
+    "code": "scaffold",
 }
 
 
@@ -85,13 +86,14 @@ async def set_thread(db: Db, project_id: uuid.UUID, **fields: Any) -> None:
 
 async def _announce(db: Db, project_id: uuid.UUID, status: str, pending, text: str) -> None:
     """Post pauses and completion into the chat where the person will act on them."""
+    from app.modules.conversations.models import STAGE_CHANNELS
     from app.modules.conversations.service import add_message
 
     kind = (pending or {}).get("kind")
     if status == "RUNNING" or kind == "intake_questions":  # the orchestrator already asked
         return
     stage = (pending or {}).get("stage")
-    channel = stage if stage in ("requirements", "architecture", "plan", "budget") else "intake"
+    channel = stage if stage in STAGE_CHANNELS else "intake"
     last = await db.messages.find_one(
         {"project_id": project_id, "channel": channel},
         sort=[("seq", -1)],

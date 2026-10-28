@@ -6,7 +6,8 @@ from pydantic import Field
 
 from app.core.documents import Document, now
 
-Channel = Literal["intake", "requirements", "architecture", "plan", "budget"]
+Channel = Literal["intake", "requirements", "architecture", "plan", "budget", "code"]
+STAGE_CHANNELS = ("requirements", "architecture", "plan", "budget", "code")
 Role = Literal["user", "agent", "system"]
 
 

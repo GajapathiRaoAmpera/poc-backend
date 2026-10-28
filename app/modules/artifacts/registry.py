@@ -41,8 +41,8 @@ _KINDS: dict[str, KindSpec] = {}
 DEPENDENTS: dict[str, list[str]] = {
     "specification": ["requirements"],
     "requirements": ["architecture", "plan"],
-    "architecture": ["plan", "budget"],
-    "plan": ["budget"],
+    "architecture": ["plan", "budget", "code"],
+    "plan": ["budget", "code"],
 }
 
 
