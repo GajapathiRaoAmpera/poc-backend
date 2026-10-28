@@ -22,6 +22,7 @@ from app.modules.artifacts.models import (
 )
 from app.modules.auth.models import User
 from app.modules.projects.models import Project
+from app.modules.projects.spec_schema import requirements_scope
 
 LABELS = {
     "specification": "Specification",
@@ -61,11 +62,30 @@ async def _current_revision(db: Db, project: Project, ref_kind: str, session=Non
     return art.approved_revision if art else None
 
 
+async def _same_spec_scope(db, project, ref: SourceRef, current, session=None) -> bool:
+    """A spec revision that differs from the latest only in schedule inputs is still current."""
+    if ref.kind != "specification" or current is None:
+        return False
+    docs = {
+        d["revision"]: d["data"]
+        async for d in db.project_specifications.find(
+            {"project_id": project.id, "revision": {"$in": [ref.revision, current]}},
+            {"revision": 1, "data": 1},
+            session=session,
+        )
+    }
+    return len(docs) == 2 and requirements_scope(docs[ref.revision]) == requirements_scope(
+        docs[current]
+    )
+
+
 async def _outdated_sources(db, project, sources: list[SourceRef], session=None) -> list[str]:
     reasons = []
     for ref in sources:
         current = await _current_revision(db, project, ref.kind, session)
-        if current != ref.revision:
+        if current != ref.revision and not await _same_spec_scope(
+            db, project, ref, current, session
+        ):
             now_txt = f"revision {current}" if current is not None else "no approved revision"
             reasons.append(
                 f"{_label(ref.kind)} changed: built on revision {ref.revision}, "

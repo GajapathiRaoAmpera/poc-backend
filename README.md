@@ -53,7 +53,7 @@ A project starts from one sentence (`POST /api/v1/projects/intake`). Each projec
 and checkpointed to MongoDB (`graph_checkpoints`, `graph_checkpoint_writes`):
 
 ```
-START → orchestrator ⇄ requirements | architecture | gate (interrupt) → END
+START → orchestrator ⇄ requirements | architecture | plan | budget | gate (interrupt) → END
 ```
 
 - The **Project Orchestrator Agent** (`agents/orchestrator/`) turns the idea and the current state
@@ -72,6 +72,23 @@ START → orchestrator ⇄ requirements | architecture | gate (interrupt) → EN
 
 `create-superadmin` prompts for the password twice; no default accounts exist.
 
+## Plan and budget (C2)
+
+Design: [`docs/specs/2026-10-27-c2-plan-budget-design.md`](docs/specs/2026-10-27-c2-plan-budget-design.md)
+
+- After architecture approval the **Planning Agent** writes milestones and tasks (role, effort in days,
+  dependencies, requirement and component links). Code validates them (every MUST requirement covered,
+  no dependency cycles, known roles) and computes the schedule: Monday–Friday, one task per person per
+  role at a time (`team_size` in Preferences, default 1), from `start_date` (default: the day it runs).
+- After plan approval the **Budget Agent** adds only non-labour costs and a contingency %. Code computes
+  labour as `effort_days × hours_per_day × hourly_rate[role]` with `Decimal`, and every total.
+- **Rate card:** the Super Admin sets hourly rates per role and hours per working day at
+  `GET/PUT /api/v1/admin/rate-card`; a project can override them (`/api/v1/projects/{id}/rate-card`).
+  The default is seeded on startup, by `init-db`, or on first read. **The seeded rates are placeholders**
+  (USD, 8 h/day): replace them with real rates before relying on budgets.
+- A rate change reprices the budget without an LLM call; a team-size or start-date change reschedules the
+  plan without one. Requirements or architecture changes mark the plan, then the budget, stale.
+
 ## Test
 
 Tests use a throwaway local MongoDB replica set (`mongo:9.0` — 8.x refuses to start on Linux kernels ≥ 6.19) and never touch Atlas: they ignore `MONGODB_URI` and refuse to run unless `TEST_MONGODB_URI` (default `mongodb://localhost:27018`) is local and `TEST_MONGODB_DB` (default `ampera_test`) ends in `_test`.
@@ -86,8 +103,8 @@ uv run ruff check .
 
 - **Password reset email:** no email provider is configured. In `development` the reset link is
   written to the server log; in other environments the request is accepted but nothing is sent.
-- **Agents available:** Project Orchestrator, Requirements, Architecture. Planning, Budget,
-  Development, Validation and Repair agents are planned (C2/C3) and shown as unavailable.
+- **Agents available:** Project Orchestrator, Requirements, Architecture, Planning and Budget.
+  Development, Validation and Repair agents are planned (C3) and shown as unavailable.
 - **Checkpointer:** the official `MongoDBSaver` uses a synchronous client in a thread pool (one
   extra MongoDB connection pool per worker).
 - **Login throttling** is per email + IP (`login_attempts`, auto-deleted after 24 h by a TTL index).

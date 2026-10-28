@@ -31,11 +31,18 @@ from app.modules.projects.models import Project
 
 logger = logging.getLogger(__name__)
 
-AGENT_FOR = {"requirements": "requirements_analyst", "architecture": "solution_architect"}
+AGENT_FOR = {
+    "requirements": "requirements_analyst",
+    "architecture": "solution_architect",
+    "plan": "project_planner",
+    "budget": "budget_estimator",
+}
 LABEL = {
     "orchestrator": "Project Orchestrator",
     "requirements": "Requirements Agent",
     "architecture": "Architecture Agent",
+    "plan": "Plan Agent",
+    "budget": "Budget Agent",
 }
 
 

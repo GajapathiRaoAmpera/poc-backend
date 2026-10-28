@@ -16,6 +16,9 @@ from app.modules.conversations.router import router as conversations_router
 from app.modules.delivery.router import router as delivery_router
 from app.modules.orchestration.router import router as workflow_router
 from app.modules.projects.router import router as projects_router
+from app.modules.ratecard.router import admin_router as ratecard_admin_router
+from app.modules.ratecard.router import router as ratecard_router
+from app.modules.ratecard.service import seed_default
 from app.modules.users.router import router as users_router
 
 logger = logging.getLogger(__name__)
@@ -27,6 +30,7 @@ async def lifespan(_: FastAPI):
         db = database()
         await db.command("ping")
         await ensure_indexes(db)
+        await seed_default(db)
     except Exception as exc:
         # Never print the URI itself: it contains the database password.
         raise SystemExit(
@@ -58,6 +62,8 @@ def create_app() -> FastAPI:
     api.include_router(delivery_router)
     api.include_router(projects_router)
     api.include_router(workflow_router)
+    api.include_router(ratecard_admin_router)
+    api.include_router(ratecard_router)
     api.include_router(artifacts_router)
     api.include_router(changesets_router)
     api.include_router(conversations_router)

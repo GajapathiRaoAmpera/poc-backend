@@ -6,7 +6,7 @@ from app.modules.projects.models import Project
 
 async def on_run_finished(db: Db, run: AgentRun) -> None:
     """A stage chat run ended: report failures in the chat and let the delivery graph react."""
-    if run.mode != "chat" or run.stage not in ("requirements", "architecture"):
+    if run.mode != "chat" or run.stage not in ("requirements", "architecture", "plan", "budget"):
         return
     from app.modules.delivery.service import notify
 

@@ -20,6 +20,7 @@ from app.core.security import hash_password, validate_password
 from app.modules.audit.service import record_audit
 from app.modules.auth.models import User, UserRole
 from app.modules.auth.schemas import RegisterIn
+from app.modules.ratecard.service import seed_default
 
 
 def _read_password(from_stdin: bool) -> str:
@@ -49,7 +50,9 @@ async def _create_superadmin(email: str, name: str, password: str) -> None:
 async def _init_db() -> None:
     client = make_client()
     try:
-        await ensure_indexes(database(client))
+        db = database(client)
+        await ensure_indexes(db)
+        await seed_default(db)
     finally:
         await client.close()
 

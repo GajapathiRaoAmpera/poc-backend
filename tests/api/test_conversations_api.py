@@ -216,7 +216,7 @@ async def test_message_seq_monotonic_and_after_filter(owner_client, db, work):
 
 async def test_unknown_channel_422(owner_client):
     pid = await _intake(owner_client)
-    r = await owner_client.get(f"{API}/projects/{pid}/conversations/budget/messages")
+    r = await owner_client.get(f"{API}/projects/{pid}/conversations/code/messages")
     assert r.status_code == 422
 
 

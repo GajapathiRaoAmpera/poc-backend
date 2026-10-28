@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.core.documents import Document, now
 from app.modules.artifacts.models import SourceRef
 
-RunMode = Literal["generate", "revise", "change_request", "chat"]
+RunMode = Literal["generate", "revise", "change_request", "chat", "reschedule", "reprice"]
 EventType = Literal["status", "step", "validation", "error", "message", "graph"]
 
 

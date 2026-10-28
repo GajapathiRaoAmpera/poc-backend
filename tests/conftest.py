@@ -38,7 +38,14 @@ async def _indexed():
 async def _clean_collections():
     yield
     db = database()
-    for name in [*INDEXES, "locks", "counters", "graph_checkpoints", "graph_checkpoint_writes"]:
+    for name in [
+        *INDEXES,
+        "locks",
+        "counters",
+        "settings",
+        "graph_checkpoints",
+        "graph_checkpoint_writes",
+    ]:
         await db[name].delete_many({})
 
 

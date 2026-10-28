@@ -13,7 +13,9 @@ from app.core.db import Db
 from app.modules.artifacts import service as artifacts
 from app.modules.projects.models import Project
 
-ARTIFACT_STAGES = ("requirements", "architecture")
+ARTIFACT_STAGES = ("requirements", "architecture", "plan", "budget")
+# Stages whose stale draft can be refreshed without the LLM when only their inputs' numbers moved.
+UPSTREAM = {"plan": ("requirements", "architecture"), "budget": ("plan", "architecture")}
 MAX_DIGEST = 4000
 
 
@@ -33,6 +35,10 @@ class StageFacts:
     answered_since_agent: bool = False
     active_run: bool = False
     summary: str = ""
+    # Stale, but built on the currently approved upstream revisions: only team/start (plan) or
+    # rates (budget) changed, so a deterministic reschedule/reprice is enough.
+    reschedule_only: bool = False
+    reprice_only: bool = False
 
 
 @dataclass
@@ -46,10 +52,25 @@ class Facts:
     # Orchestrator turns the client has replied to; bounds how long it may keep asking.
     answered_rounds: int = 0
     preferences: dict[str, Any] = field(default_factory=dict)
+    rate_card_roles: int = 0
 
 
 def _answered(content: dict[str, Any]) -> set[str]:
     return {q["id"] for q in content.get("open_questions", []) if (q.get("answer") or "").strip()}
+
+
+async def _rate_card(db: Db, project: Project) -> dict[str, Any]:
+    """The effective rate card as stored (raw: an empty card must not raise here)."""
+    return project.rate_card or await db.settings.find_one({"_id": "rate_card"}) or {}
+
+
+async def on_approved_sources(db: Db, project: Project, rev, stage: str) -> bool:
+    used = {s.kind: s.revision for s in rev.sources}
+    for kind in UPSTREAM[stage]:
+        art = await artifacts.get_artifact(db, project, kind)
+        if art is None or used.get(kind) != art.approved_revision:
+            return False
+    return True
 
 
 async def _stage_facts(db: Db, project: Project, stage: str) -> StageFacts:
@@ -68,6 +89,11 @@ async def _stage_facts(db: Db, project: Project, stage: str) -> StageFacts:
     f.approved_revision = art.approved_revision
     f.approved_is_latest = art.approved_revision == art.latest_revision
     f.stale, f.stale_reason = art.stale, art.stale_reason
+    if f.stale and stage in UPSTREAM and await on_approved_sources(db, project, rev, stage):
+        if stage == "plan":
+            f.reschedule_only = True
+        else:
+            f.reprice_only = True
     # Unanswered blocking questions are stored as approval errors; they are counted separately.
     f.save_errors = sum(
         1
@@ -115,6 +141,7 @@ async def collect_facts(db: Db, project: Project) -> Facts:
         for (who, _), (nxt, _) in zip(transcript, transcript[1:], strict=False)
         if who == "orchestrator" and nxt == "client"
     )
+    card = await _rate_card(db, project)
     return Facts(
         project_id=project.id,
         spec_revision=spec["revision"] if spec else None,
@@ -123,6 +150,7 @@ async def collect_facts(db: Db, project: Project) -> Facts:
         intake_transcript=transcript,
         answered_rounds=answered,
         preferences=(doc or {}).get("preferences") or {},
+        rate_card_roles=len(card.get("roles") or []),
     )
 
 

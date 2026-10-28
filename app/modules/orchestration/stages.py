@@ -11,9 +11,18 @@ from app.modules.orchestration.models import AgentRun, RunStatus
 from app.modules.projects.models import Project
 
 STAGES = ["requirements", "architecture", "plan", "budget", "code"]
-AVAILABLE = {"requirements", "architecture"}
-AGENTS = {"requirements": "requirements_analyst", "architecture": "solution_architect"}
-DEPENDS_ON = {"architecture": ["requirements"]}
+AVAILABLE = {"requirements", "architecture", "plan", "budget"}
+AGENTS = {
+    "requirements": "requirements_analyst",
+    "architecture": "solution_architect",
+    "plan": "project_planner",
+    "budget": "budget_estimator",
+}
+DEPENDS_ON = {
+    "architecture": ["requirements"],
+    "plan": ["requirements", "architecture"],
+    "budget": ["plan", "architecture"],
+}
 LABEL = {
     "requirements": "Requirements",
     "architecture": "Architecture",

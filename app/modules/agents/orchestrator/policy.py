@@ -5,13 +5,13 @@ from app.modules.artifacts.models import ValidationIssue
 from app.modules.delivery.facts import Facts
 from app.modules.projects.spec_schema import ProjectSpecification
 
-IMPLEMENTED = {"requirements", "architecture"}
+IMPLEMENTED = {"requirements", "architecture", "plan", "budget"}
 ORDER = ["requirements", "architecture", "plan", "budget", "code"]
-REQUIRED_APPROVAL = {"requirements", "architecture"}
+REQUIRED_APPROVAL = {"requirements", "architecture", "plan", "budget"}
 DEPENDS_ON = {
     "architecture": ["requirements"],
-    "plan": ["architecture"],
-    "budget": ["architecture"],
+    "plan": ["requirements", "architecture"],
+    "budget": ["plan", "architecture"],
     "code": ["architecture"],
 }
 MAX_QUESTIONS = 7

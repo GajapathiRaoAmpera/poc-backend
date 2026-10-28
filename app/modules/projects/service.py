@@ -6,13 +6,15 @@ from pymongo.errors import DuplicateKeyError
 
 from app.core.db import Db, in_transaction
 from app.core.documents import now
-from app.core.errors import Conflict, NotFound
+from app.core.errors import AppError, Conflict, NotFound
 from app.core.pagination import _PageParams
-from app.modules.artifacts.service import mark_dependents_stale
+from app.modules.artifacts.service import mark_dependents_stale, mark_stale
 from app.modules.auth.models import User, UserRole
 from app.modules.projects.models import Project, ProjectSpecification, ProjectStatus
 from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
 from app.modules.projects.spec_schema import ProjectSpecification as SpecData
+from app.modules.projects.spec_schema import requirements_scope
+from app.modules.ratecard.service import effective
 
 SPEC_SECTIONS = ("basics", "problem", "requirements", "constraints")
 
@@ -172,7 +174,9 @@ async def add_spec_revision(
     """Append revision n+1 and mark requirements built on older revisions stale."""
     for attempt in range(2):
         last = await db.project_specifications.find_one(
-            {"project_id": project.id}, sort=[("revision", -1)], projection={"revision": 1}
+            {"project_id": project.id},
+            sort=[("revision", -1)],
+            projection={"revision": 1, "data": 1},
         )
         spec = ProjectSpecification(
             project_id=project.id,
@@ -189,7 +193,8 @@ async def add_spec_revision(
                 raise Conflict("The specification was changed by another save. Reload.") from exc
             continue
         # Requirements built from an older spec revision are now stale.
-        await mark_dependents_stale(db, project, "specification", spec.revision)
+        if last is None or requirements_scope(last["data"]) != requirements_scope(data):
+            await mark_dependents_stale(db, project, "specification", spec.revision)
         return spec
     raise AssertionError("unreachable")
 
@@ -212,11 +217,24 @@ async def save_preferences(
     db: Db, user: User, project_id: uuid.UUID, data: dict[str, Any]
 ) -> ProjectOut:
     project = await get_project_for(db, user, project_id)
+    team = data.get("team_size")
+    if team:
+        allowed = (await effective(db, project)).role_names()
+        if unknown := sorted(set(team) - set(allowed)):
+            raise AppError(
+                "UNKNOWN_ROLE",
+                f"Unknown role(s): {', '.join(unknown)}. Allowed roles: {', '.join(allowed)}.",
+                422,
+            )
+    old = project.preferences or {}
+    changed = any(old.get(k) != data.get(k) for k in ("start_date", "team_size"))
     project.preferences = data or None
     project.updated_at = now()
     await db.projects.update_one(
         {"_id": project.id},
         {"$set": {"preferences": project.preferences, "updated_at": project.updated_at}},
     )
+    if changed:  # no-op when no plan artifact exists
+        await mark_stale(db, project, "plan", "Team or start date changed")
     specs = await latest_specs(db, [project.id])
     return to_out(project, specs.get(project.id))

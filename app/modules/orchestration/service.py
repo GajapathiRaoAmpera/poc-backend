@@ -53,6 +53,34 @@ async def _resolve_inputs(
                 SourceRef(kind="requirements", artifact_id=art.id, revision=art.latest_revision)
             )
         return inputs
+    if stage == "plan":
+        inputs = []
+        for kind in ("requirements", "architecture"):
+            art = await artifacts.get_artifact(db, project, kind)
+            inputs.append(SourceRef(kind=kind, artifact_id=art.id, revision=art.approved_revision))
+        if mode in ("chat", "reschedule"):
+            art = await artifacts.get_artifact(db, project, "plan")
+            if art is not None and art.latest_revision:
+                inputs.append(
+                    SourceRef(kind="plan", artifact_id=art.id, revision=art.latest_revision)
+                )
+            elif mode == "reschedule":
+                raise StageBlocked(["There is no plan to reschedule yet"])
+        return inputs
+    if stage == "budget":
+        inputs = []
+        for kind in ("plan", "architecture"):
+            art = await artifacts.get_artifact(db, project, kind)
+            inputs.append(SourceRef(kind=kind, artifact_id=art.id, revision=art.approved_revision))
+        if mode in ("chat", "reprice"):
+            art = await artifacts.get_artifact(db, project, "budget")
+            if art is not None and art.latest_revision:
+                inputs.append(
+                    SourceRef(kind="budget", artifact_id=art.id, revision=art.latest_revision)
+                )
+            elif mode == "reprice":
+                raise StageBlocked(["There is no budget to reprice yet"])
+        return inputs
     req = await artifacts.get_artifact(db, project, "requirements")
     inputs = [SourceRef(kind="requirements", artifact_id=req.id, revision=req.approved_revision)]
     if mode == "chat":

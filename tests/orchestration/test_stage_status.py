@@ -105,4 +105,4 @@ async def test_stale_overrides(db, project, owner):
 async def test_workflow_lists_all_stages_with_unavailable(db, project):
     stages = await workflow(db, project)
     assert [s.stage for s in stages] == ["requirements", "architecture", "plan", "budget", "code"]
-    assert [s.status for s in stages][2:] == ["UNAVAILABLE"] * 3
+    assert [s.status for s in stages][2:] == ["BLOCKED", "BLOCKED", "UNAVAILABLE"]

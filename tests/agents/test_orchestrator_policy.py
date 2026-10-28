@@ -55,7 +55,7 @@ def test_valid_plan_has_no_issues():
 
 
 def test_unavailable_agent_included():
-    p = plan(stages=[stage("requirements"), stage("budget", inputs=["requirements"])])
+    p = plan(stages=[stage("requirements"), stage("code", inputs=["requirements"])])
     assert "UNAVAILABLE_AGENT" in codes(p)
 
 
@@ -129,7 +129,7 @@ def test_default_plan_passes_policy():
 def test_default_plan_includes_all_implemented_with_approval():
     p = default_plan(facts(), None)
     included = {s.stage: s for s in p.stages if s.include}
-    assert set(included) == {"requirements", "architecture"}
+    assert list(included) == ["requirements", "architecture", "plan", "budget"]
     assert all(s.approval_required for s in included.values())
     assert p.next_stage == "requirements"
 
@@ -170,3 +170,26 @@ def test_orchestrator_prompt_stays_within_free_tier_budget():
     user = prompts.user_prompt("digest", transcript, brief, {})
     assert len(user) <= prompts.TRANSCRIPT_CHARS + prompts.BRIEF_CHARS + 6000
     assert "latest answer" in user and "\n " not in user.split("<current_brief>")[1][:200]
+
+
+def test_budget_without_plan_is_order_error():
+    p = plan(
+        stages=[
+            stage("requirements"),
+            stage("architecture", inputs=["requirements"]),
+            stage("plan", include=False),
+            stage("budget", inputs=["architecture"]),
+        ]
+    )
+    assert "ORDER" in codes(p)
+
+
+def test_plan_approval_cannot_be_removed():
+    p = plan(
+        stages=[
+            stage("requirements"),
+            stage("architecture", inputs=["requirements"]),
+            stage("plan", inputs=["requirements", "architecture"], approval=False),
+        ]
+    )
+    assert "APPROVAL_REQUIRED" in codes(p)

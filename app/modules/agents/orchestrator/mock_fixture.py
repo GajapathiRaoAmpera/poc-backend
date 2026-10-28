@@ -41,8 +41,8 @@ def orchestrator_output(system: str, user: str) -> dict:
             "stages": [
                 stage("requirements", []),
                 stage("architecture", ["requirements"]),
-                stage("plan", [], False),
-                stage("budget", [], False),
+                stage("plan", ["requirements", "architecture"]),
+                stage("budget", ["plan", "architecture"]),
                 stage("code", [], False),
             ],
             "missing_info": [
@@ -55,7 +55,7 @@ def orchestrator_output(system: str, user: str) -> dict:
             ],
             "next_action": "ask_user" if ask else "run_stage",
             "next_stage": None if ask else "requirements",
-            "decision_summary": "[Mock] Requirements first, then architecture.",
+            "decision_summary": "[Mock] Requirements, architecture, then plan and budget.",
         },
-        "summary": "[Mock] Planned requirements and architecture.",
+        "summary": "[Mock] Planned requirements, architecture, plan and budget.",
     }

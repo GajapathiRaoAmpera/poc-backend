@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.core.documents import Document, now
 
-Origin = Literal["agent", "user", "change_set", "restore"]
+Origin = Literal["agent", "user", "change_set", "restore", "system"]
 Decision = Literal["APPROVED", "CHANGES_REQUESTED"]
 
 

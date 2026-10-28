@@ -8,7 +8,7 @@ from app.modules.delivery.service import notify
 from app.modules.projects import service
 from app.modules.projects.models import ProjectStatus
 from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
-from app.modules.projects.spec_schema import Constraints, ProjectSpecification
+from app.modules.projects.spec_schema import Constraints, ProjectSpecification, requirements_scope
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -69,8 +69,13 @@ async def save_preferences(
     project_id: uuid.UUID, data: Constraints, user: CurrentUser, db: DbSession
 ) -> ProjectOut:
     """Optional preferences; they override the Orchestrator's brief on its next plan."""
-    out = await service.save_preferences(
-        db, user, project_id, data.model_dump(mode="json", exclude_none=True)
+    old = (await service.get_project_for(db, user, project_id)).preferences or {}
+    new = data.model_dump(mode="json", exclude_none=True)
+    out = await service.save_preferences(db, user, project_id, new)
+    # Only start date / team size changed: reschedule the plan without an orchestrator re-plan.
+    only_schedule = old != new and requirements_scope({"constraints": old}) == requirements_scope(
+        {"constraints": new}
     )
-    await notify(db, await service.get_project_for(db, user, project_id), "user_message")
+    trigger = "schedule_changed" if only_schedule else "user_message"
+    await notify(db, await service.get_project_for(db, user, project_id), trigger)
     return out

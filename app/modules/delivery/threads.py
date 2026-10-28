@@ -17,6 +17,8 @@ STAGE_LABEL = {
     "orchestrator": "Project Orchestrator",
     "requirements": "requirements",
     "architecture": "architecture",
+    "plan": "plan",
+    "budget": "budget",
 }
 
 
@@ -89,7 +91,7 @@ async def _announce(db: Db, project_id: uuid.UUID, status: str, pending, text: s
     if status == "RUNNING" or kind == "intake_questions":  # the orchestrator already asked
         return
     stage = (pending or {}).get("stage")
-    channel = stage if stage in ("requirements", "architecture") else "intake"
+    channel = stage if stage in ("requirements", "architecture", "plan", "budget") else "intake"
     last = await db.messages.find_one(
         {"project_id": project_id, "channel": channel},
         sort=[("seq", -1)],

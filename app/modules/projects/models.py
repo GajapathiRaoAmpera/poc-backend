@@ -25,6 +25,8 @@ class Project(Timestamped):
     name_source: Literal["user", "intake", "orchestrator"] = "user"
     # Optional user preferences (the spec's ``Constraints`` shape); override the orchestrator.
     preferences: dict[str, Any] | None = None
+    # Per-project rate card override (RateCard JSON); None = use the platform default.
+    rate_card: dict[str, Any] | None = None
 
 
 class ProjectSpecification(Document):

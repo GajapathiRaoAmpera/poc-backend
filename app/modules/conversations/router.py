@@ -16,7 +16,12 @@ from app.modules.projects.service import get_project_for
 
 router = APIRouter(prefix="/projects/{project_id}/conversations", tags=["conversations"])
 
-AGENT_LABEL = {"requirements": "Requirements Agent", "architecture": "Architecture Agent"}
+AGENT_LABEL = {
+    "requirements": "Requirements Agent",
+    "architecture": "Architecture Agent",
+    "plan": "Plan Agent",
+    "budget": "Budget Agent",
+}
 
 
 @router.get("/{channel}/messages")

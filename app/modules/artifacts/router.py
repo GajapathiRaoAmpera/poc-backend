@@ -27,7 +27,7 @@ from app.modules.orchestration.schemas import (
 from app.modules.orchestration.stages import dependency_blockers
 from app.modules.projects.service import get_project_for
 
-Kind = Literal["requirements", "architecture"]
+Kind = Literal["requirements", "architecture", "plan", "budget"]
 router = APIRouter(prefix="/projects/{project_id}", tags=["artifacts"])
 
 

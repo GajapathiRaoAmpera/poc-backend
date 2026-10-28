@@ -120,7 +120,7 @@ async def test_invalid_plan_falls_back(db):
                 "approval_required": False,
             },
             {
-                "stage": "budget",
+                "stage": "code",
                 "include": True,
                 "rationale": "b",
                 "inputs": [],
@@ -134,7 +134,7 @@ async def test_invalid_plan_falls_back(db):
     codes = {i.code for i in plan.validation.issues}
     assert {"APPROVAL_REQUIRED", "UNAVAILABLE_AGENT"} <= codes
     included = {s["stage"] for s in plan.content["stages"] if s["include"]}
-    assert included == {"requirements", "architecture"}
+    assert included == {"requirements", "architecture", "plan", "budget"}
     assert any("Default plan" in m for _, m in events)
 
 

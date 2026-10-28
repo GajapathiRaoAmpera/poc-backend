@@ -40,7 +40,9 @@ _KINDS: dict[str, KindSpec] = {}
 # Upstream → downstream. "specification" is the project spec (not an artifact).
 DEPENDENTS: dict[str, list[str]] = {
     "specification": ["requirements"],
-    "requirements": ["architecture"],
+    "requirements": ["architecture", "plan"],
+    "architecture": ["plan", "budget"],
+    "plan": ["budget"],
 }
 
 

@@ -3,12 +3,12 @@ import uuid
 import pytest
 
 from app.modules.agents.orchestrator.policy import default_plan
-from app.modules.delivery.facts import Facts, StageFacts
+from app.modules.delivery.facts import ARTIFACT_STAGES, Facts, StageFacts
 from app.modules.delivery.routing import needs_replan, route
 
 
 def facts(**stage_over) -> Facts:
-    stages = {s: StageFacts(stage=s) for s in ("requirements", "architecture")}
+    stages = {s: StageFacts(stage=s) for s in ARTIFACT_STAGES}
     for name, over in stage_over.items():
         for k, v in over.items():
             setattr(stages[name], k, v)
@@ -22,7 +22,7 @@ APPROVED = {**DRAFT, "approved_revision": 2, "approved_is_latest": True}
 def plan(f, architecture=True, missing=()):
     p = default_plan(f, None)
     for s in p.stages:
-        if s.stage == "architecture":
+        if s.stage in ("architecture", "plan", "budget"):  # plan and budget need architecture
             s.include = architecture
     p.missing_info = list(missing)
     return p
@@ -101,7 +101,42 @@ def test_architecture_changes_requested_regenerates_with_comment():
 
 
 def test_all_approved_ends():
-    assert go(requirements=APPROVED, architecture=APPROVED).node == "end"
+    stages = dict.fromkeys(("requirements", "architecture", "plan", "budget"), APPROVED)
+    assert go(**stages).node == "end"
+
+
+def test_approved_architecture_runs_plan():
+    d = go(requirements=APPROVED, architecture=APPROVED)
+    assert (d.node, d.mode) == ("plan", "generate")
+
+
+def _c2(plan_over=None, budget_over=None, roles=6):
+    f = facts(
+        requirements=APPROVED,
+        architecture=APPROVED,
+        plan={**APPROVED, **(plan_over or {})},
+        budget={**APPROVED, **(budget_over or {})},
+    )
+    f.rate_card_roles = roles
+    return route(plan(f), f, {})
+
+
+def test_stale_plan_with_same_sources_reschedules():
+    d = _c2(plan_over={"stale": True, "reschedule_only": True})
+    assert (d.node, d.mode) == ("plan", "reschedule")
+    assert _c2(plan_over={"stale": True}).mode == "generate"
+
+
+def test_stale_budget_with_same_sources_reprices():
+    d = _c2(budget_over={"stale": True, "reprice_only": True})
+    assert (d.node, d.mode) == ("budget", "reprice")
+    assert _c2(budget_over={"stale": True}).mode == "generate"
+
+
+def test_empty_rate_card_gates_budget():
+    d = _c2(budget_over={"stale": True}, roles=0)
+    assert (d.gate_kind, d.payload["stage"]) == ("needs_input", "budget")
+    assert d.payload["reason"] == "Set rates before the budget can be calculated"
 
 
 def test_architecture_excluded_ends_after_requirements():

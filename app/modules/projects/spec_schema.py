@@ -61,6 +61,10 @@ class Constraints(_Section):
     team_assumptions: Long | None = None
     compliance: ShortList | None = None
     existing_integrations: ShortList | None = None
+    start_date: date | None = None
+    team_size: (
+        Annotated[dict[str, Annotated[int, Field(ge=1, le=20)]], Field(max_length=20)] | None
+    ) = None
 
 
 class ProjectSpecification(_Section):
@@ -68,3 +72,13 @@ class ProjectSpecification(_Section):
     problem: Problem | None = None
     requirements: Requirements | None = None
     constraints: Constraints | None = None
+
+
+# Schedule inputs: they reschedule the plan (preferences mark it stale), not re-open requirements.
+SCHEDULE_ONLY = ("start_date", "team_size")
+
+
+def requirements_scope(data: dict) -> dict:
+    """The part of a specification the requirements depend on (all but the schedule inputs)."""
+    constraints = data.get("constraints") or {}
+    return {**data, "constraints": {k: v for k, v in constraints.items() if k not in SCHEDULE_ONLY}}

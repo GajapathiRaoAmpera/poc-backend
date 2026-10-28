@@ -1,6 +1,7 @@
 import pytest
 
 from app.llm.base import ProviderError
+from app.llm.fixtures import default_output
 from app.modules.agents.requirements.service import save_answers
 from app.modules.artifacts import service as artifacts
 from app.modules.projects.models import Project
@@ -67,6 +68,14 @@ async def test_resume_after_approval_runs_architecture(db, harness):
     assert [(r["status"], r["mode"]) for r in arch] == [("SUCCEEDED", "generate")]
 
 
+def _without_plan_and_budget(system, user):
+    out = default_output("orchestrator_output", system, user)
+    for s in out["content"]["stages"]:
+        if s["stage"] in ("plan", "budget"):
+            s.update(include=False, inputs=[], approval_required=False)
+    return out
+
+
 async def test_all_approved_ends_graph(db, harness):
     owner, project = await setup_project(db)
     h = harness(
@@ -74,6 +83,7 @@ async def test_all_approved_ends_graph(db, harness):
         scripted(
             requirements_output=good_requirements(open_questions=[]),
             architecture_output=good_architecture(),
+            orchestrator_output=_without_plan_and_budget,
         ),
     )
     await h.start()
