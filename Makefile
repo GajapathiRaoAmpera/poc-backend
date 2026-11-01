@@ -1,6 +1,6 @@
 # poc-backend — run `make` or `make help` to list targets.
 .DEFAULT_GOAL := help
-.PHONY: help install env init-db superadmin dev api worker \
+.PHONY: help install env init-db superadmin dev api worker lan open-port \
         db-up db-down db-logs test test-file test-k lint lint-fix format check clean
 
 PORT ?= 8000
@@ -34,6 +34,15 @@ dev: ## Run API + worker together (Ctrl+C stops both)
 	@trap 'kill 0' INT TERM EXIT; \
 	uv run python -m app.worker & \
 	uv run uvicorn app.main:app --reload --port $(PORT)
+
+lan: ## Run API + worker reachable from your phone on this Wi-Fi
+	@echo "Phone URL: http://$$(ip route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($$i=="src") print $$(i+1)}'):$(PORT)/docs"
+	@trap 'kill 0' INT TERM EXIT; \
+	uv run python -m app.worker & \
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port $(PORT)
+
+open-port: ## One-time: allow the phone through the firewall (needs sudo)
+	sudo ufw allow $(PORT)/tcp
 
 ## --- Test database (local Docker MongoDB on :27018) ---
 db-up: ## Start the throwaway test MongoDB
