@@ -20,6 +20,7 @@ from pymongo import ReturnDocument
 from app.core.db import Db
 from app.core.documents import now
 from app.llm.base import LLMProvider, ProviderError
+from app.llm.registry import for_stage
 from app.modules.agents.base import (
     AgentContext,
     AgentOutcome,
@@ -158,7 +159,7 @@ class Worker:
             await self._run_finished(run.id)
             return True
 
-        provider = self.provider_factory()
+        provider = for_stage(self.provider_factory(), run.stage, run.mode)
         fields: dict[str, Any] = {
             "provider": provider.name,
             "model": provider.model,

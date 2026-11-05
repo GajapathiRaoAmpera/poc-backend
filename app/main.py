@@ -21,6 +21,7 @@ from app.modules.ratecard.router import admin_router as ratecard_admin_router
 from app.modules.ratecard.router import router as ratecard_router
 from app.modules.ratecard.service import seed_default
 from app.modules.users.router import router as users_router
+from app.modules.voice.router import router as voice_router
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     api.include_router(plan_edits_router)
     api.include_router(changesets_router)
     api.include_router(conversations_router)
+    api.include_router(voice_router)
     app.include_router(api)
     return app
 

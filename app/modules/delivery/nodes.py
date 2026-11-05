@@ -15,6 +15,7 @@ from pymongo.errors import DuplicateKeyError
 from app.core.documents import now
 from app.core.errors import QuotaExceeded
 from app.llm.base import ProviderError
+from app.llm.registry import for_stage
 from app.modules.agents.base import AgentContext, AgentOutcome, OutputInvalid, get_agent
 from app.modules.agents.orchestrator import agent as orchestrator_agent
 from app.modules.agents.orchestrator.schema import PlanContent
@@ -90,7 +91,7 @@ async def _start_or_reuse_run(
     inputs = (
         [] if stage == "orchestrator" else await _resolve_inputs(db, project, stage, mode, None)
     )
-    provider = deps.provider_factory()
+    provider = for_stage(deps.provider_factory(), stage, mode)
     run = AgentRun(
         project_id=project.id,
         owner_id=project.owner_id,
@@ -116,7 +117,8 @@ async def _start_or_reuse_run(
                 stage,
                 "system",
                 f"{LABEL[stage]} started ({mode})",
-                refs={"run_id": str(run.id)},
+                # progress: voice clients wait past this notice for the real reply.
+                refs={"run_id": str(run.id), "progress": True},
             )
     except DuplicateKeyError as exc:
         if "graph_key" in (exc.details or {}).get("keyPattern", {}):
@@ -199,7 +201,7 @@ async def run_agent_node(
         return started
     run, db = started, deps.db
     attempt = await _push_attempt(deps, run)
-    provider = deps.provider_factory()
+    provider = for_stage(deps.provider_factory(), stage, mode)
 
     async def emit(type_, message, data=None):
         await events.emit(db, project.id, run.id, type_, message, data)

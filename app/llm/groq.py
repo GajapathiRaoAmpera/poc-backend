@@ -4,6 +4,7 @@ Structured outputs on Groq don't support streaming or tools, so each call is one
 Best-effort schema mode is used; callers always re-validate the result.
 """
 
+import copy
 import json
 from typing import Any
 
@@ -37,12 +38,22 @@ class GroqProvider:
         model: str,
         http: httpx.AsyncClient | None = None,
         max_input_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         self._key = api_key
-        self.model = model
         self._http = http or httpx.AsyncClient()
         # Groq rejects any single request above the account's tokens-per-minute limit (413).
         self.max_input_tokens = max_input_tokens
+        self.reasoning_effort = reasoning_effort
+        self.model = f"{model}@{reasoning_effort}" if reasoning_effort else model
+        self._model = model
+
+    def with_effort(self, effort: str | None) -> "GroqProvider":
+        """A copy that sends ``reasoning_effort``; shares the HTTP client."""
+        clone = copy.copy(self)
+        clone.reasoning_effort = effort
+        clone.model = f"{self._model}@{effort}" if effort else self._model
+        return clone
 
     def _too_large(self, estimate: int | None = None) -> ProviderError:
         size = f"about {estimate:,} tokens, " if estimate else ""
@@ -69,7 +80,7 @@ class GroqProvider:
         if self.max_input_tokens and estimate > self.max_input_tokens:
             raise self._too_large(estimate)
         body = {
-            "model": self.model,
+            "model": self._model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "response_format": {
                 "type": "json_schema",
@@ -78,6 +89,8 @@ class GroqProvider:
             "temperature": 0.2,
             "max_completion_tokens": max_output_tokens,
         }
+        if self.reasoning_effort:
+            body["reasoning_effort"] = self.reasoning_effort
         try:
             resp = await self._http.post(
                 GROQ_URL,

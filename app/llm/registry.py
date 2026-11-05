@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from app.core.config import Settings, get_settings
+from app.core.config import DEFAULT_GROQ_EFFORT, Settings, get_settings
 from app.llm.base import LLMProvider
 from app.llm.gemini import GeminiProvider
 from app.llm.groq import GroqProvider
@@ -39,3 +39,20 @@ def get_provider() -> LLMProvider:
 def set_provider_for_tests(provider: LLMProvider | None) -> None:
     global _override
     _override = provider
+
+
+_LOWER = {"high": "medium", "medium": "low", "low": "low"}
+
+
+def effort_for(stage: str | None, mode: str | None, settings: Settings | None = None) -> str | None:
+    settings = settings or get_settings()
+    effort = {**DEFAULT_GROQ_EFFORT, **settings.groq_effort}.get(stage or "")
+    if effort and mode == "chat" and settings.groq_chat_effort_drop:
+        effort = _LOWER[effort]
+    return effort
+
+
+def for_stage(provider: LLMProvider, stage: str | None, mode: str | None) -> LLMProvider:
+    """Tune the provider for one stage; providers without effort support pass through."""
+    with_effort = getattr(provider, "with_effort", None)
+    return with_effort(effort_for(stage, mode)) if with_effort else provider

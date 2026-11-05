@@ -4,6 +4,17 @@ from typing import Literal
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+Effort = Literal["low", "medium", "high"]
+
+DEFAULT_GROQ_EFFORT: dict[str, Effort] = {
+    "orchestrator": "low",
+    "requirements": "medium",
+    "budget": "medium",
+    "plan": "medium",
+    "architecture": "high",
+    "code": "high",
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -23,8 +34,19 @@ class Settings(BaseSettings):
     groq_model: str = "openai/gpt-oss-120b"
     # Groq's per-request cap equals the account's tokens-per-minute limit (free tier: 8000).
     groq_max_input_tokens: int | None = 8000
+    # gpt-oss reasoning effort per stage; chat turns drop one level so voice replies stay quick.
+    # Override in .env as JSON, e.g. GROQ_EFFORT='{"code":"medium"}' (merged over the defaults).
+    groq_effort: dict[str, Effort] = {}
+    groq_chat_effort_drop: bool = True
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"
+    # Voice front-end (Gemini Live). Uses GEMINI_API_KEY even when LLM_PROVIDER=groq.
+    voice_enabled: bool = True
+    gemini_live_model: str = "gemini-3.8-live"
+    gemini_live_voice: str = "Kore"
+    # Per-agent voice overrides (JSON), merged over the built-in distinct voices.
+    gemini_live_voices: dict[str, str] = {}
+    voice_daily_session_limit: int = 100
     platform_daily_run_limit: int = 50
     agent_timeout_s: int = 180
 
