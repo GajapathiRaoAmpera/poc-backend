@@ -133,6 +133,16 @@ class GroqProvider:
                         retryable=True,
                     )
                 raise self._too_large()
+            if code == "RATE_LIMITED" and "(TPD)" in str(err.get("message")):
+                # Daily quota: per-minute retries can't succeed and only pile up failed runs.
+                wait = resp.headers.get("retry-after")
+                when = f" in about {int(wait) // 60 + 1} minutes" if wait and wait.isdigit() else " later"
+                raise ProviderError(
+                    "QUOTA_EXHAUSTED",
+                    f"The AI service's daily token quota is used up. Try again{when}, "
+                    "or switch to a different model or plan.",
+                    retryable=False,
+                )
             # Never echo the provider's body: it can contain request details.
             raise ProviderError(
                 code,

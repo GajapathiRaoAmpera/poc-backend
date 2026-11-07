@@ -138,3 +138,12 @@ async def test_groq_413_on_a_prompt_that_fits_is_a_retryable_rate_limit():
     with pytest.raises(ProviderError) as e:
         await _call(p)
     assert (e.value.code, e.value.retryable) == ("RATE_LIMITED", True)
+
+
+async def test_groq_daily_quota_429_is_not_retried():
+    body = {"error": {"message": "Rate limit reached ... on tokens per day (TPD): Limit 200000"}}
+    p = _provider(lambda req: httpx.Response(429, json=body, headers={"retry-after": "1893"}))
+    with pytest.raises(ProviderError) as e:
+        await _call(p)
+    assert e.value.code == "QUOTA_EXHAUSTED" and not e.value.retryable
+    assert "32 minutes" in e.value.message
