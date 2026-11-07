@@ -19,16 +19,24 @@ from app.modules.projects.models import Project
 
 
 async def _quota_check(db: Db, user: User) -> None:
-    limit = (
-        user.daily_run_limit
-        if user.daily_run_limit is not None
-        else (get_settings().platform_daily_run_limit)
-    )
+    platform_limit = get_settings().platform_daily_run_limit
+    if user.daily_run_limit is None and platform_limit == 0:
+        return
+    limit = user.daily_run_limit if user.daily_run_limit is not None else platform_limit
     used = await db.agent_runs.count_documents(
         {"created_by": user.id, "created_at": {"$gt": now() - timedelta(hours=24)}}
     )
     if used >= limit:
         raise QuotaExceeded(limit)
+
+
+# Approved upstream artifacts each D1 stage reads (spec §8).
+_D1_INPUTS = {
+    "design": ("requirements", "architecture"),
+    "implementation": ("code", "design", "architecture", "requirements", "plan"),
+    "testing": ("implementation", "requirements", "design"),
+    "deploy": ("implementation", "testing"),
+}
 
 
 async def _resolve_inputs(
@@ -93,6 +101,18 @@ async def _resolve_inputs(
                     SourceRef(kind="code", artifact_id=art.id, revision=art.latest_revision)
                 )
         return inputs
+    if stage in _D1_INPUTS:
+        inputs = []
+        for kind in _D1_INPUTS[stage]:
+            art = await artifacts.get_artifact(db, project, kind)
+            inputs.append(SourceRef(kind=kind, artifact_id=art.id, revision=art.approved_revision))
+        if mode == "chat":
+            art = await artifacts.get_artifact(db, project, stage)
+            if art is not None and art.latest_revision:
+                inputs.append(
+                    SourceRef(kind=stage, artifact_id=art.id, revision=art.latest_revision)
+                )
+        return inputs
     req = await artifacts.get_artifact(db, project, "requirements")
     inputs = [SourceRef(kind="requirements", artifact_id=req.id, revision=req.approved_revision)]
     if mode == "chat":
@@ -120,8 +140,16 @@ async def _active_run(db: Db, project: Project, stage: str) -> AgentRun | None:
     return AgentRun.from_doc(doc) if doc else None
 
 
+# Stages that start a sandbox or drive a browser need more than the default run time.
+LONG_STAGES = {"implementation": 5, "testing": 5, "deploy": 2}  # deploy: LLM + 120 s push
+
+
+def job_timeout(stage: str) -> int:
+    return get_settings().agent_timeout_s * LONG_STAGES.get(stage, 1)
+
+
 async def _create_run(db: Db, project: Project, run: AgentRun) -> tuple[AgentRun, bool]:
-    job = Job(run_id=run.id, project_id=project.id, timeout_s=get_settings().agent_timeout_s)
+    job = Job(run_id=run.id, project_id=project.id, timeout_s=job_timeout(run.stage))
 
     async def txn(session) -> None:
         await db.agent_runs.insert_one(run.to_doc(), session=session)

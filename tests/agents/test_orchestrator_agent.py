@@ -134,7 +134,17 @@ async def test_invalid_plan_falls_back(db):
     codes = {i.code for i in plan.validation.issues}
     assert {"APPROVAL_REQUIRED", "ORDER"} <= codes
     included = {s["stage"] for s in plan.content["stages"] if s["include"]}
-    assert included == {"requirements", "architecture", "plan", "budget", "code"}
+    assert included == {
+        "requirements",
+        "architecture",
+        "plan",
+        "budget",
+        "code",
+        "design",
+        "implementation",
+        "testing",
+        "deploy",
+    }
     assert any("Default plan" in m for _, m in events)
 
 
@@ -231,3 +241,11 @@ async def test_optional_questions_only_posted_in_reply_to_the_client(db):
     # A re-plan the client did not trigger (approval, retry) does not re-ask optional questions.
     await _turn(db, project, lambda *a: good_plan(missing_info=asks))
     assert "CDN needed?" not in await _last_intake_reply(db, project)
+
+
+def test_mock_plan_includes_implementation_and_testing_not_deploy():
+    from app.modules.agents.orchestrator import mock_fixture
+
+    fn = mock_fixture.orchestrator_output
+    stages = {s["stage"]: s["include"] for s in fn("", "")["content"]["stages"]}
+    assert stages["implementation"] and stages["testing"] and not stages["deploy"]

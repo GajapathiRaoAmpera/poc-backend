@@ -2,10 +2,12 @@ import copy
 
 from app.core.db import Db
 from app.core.errors import NotFound, ValidationFailed
+from app.modules.agents.requirements.validate import REPO_QUESTION
 from app.modules.artifacts import service as artifacts
 from app.modules.artifacts.models import Revision
 from app.modules.auth.models import User
 from app.modules.projects.models import Project
+from app.modules.projects.schemas import REPO_URL_RE
 
 MAX_ANSWER = 2000
 
@@ -25,6 +27,12 @@ async def save_answers(
     for qid, text in answers.items():
         text = (text or "").strip()[:MAX_ANSWER]
         known[qid]["answer"] = text or None
+    url = next(
+        (a.strip() for qid, a in answers.items() if known[qid]["question"] == REPO_QUESTION and a),
+        None,
+    )
+    if url and project.repo_url is None and REPO_URL_RE.match(url) and ".." not in url:
+        await db.projects.update_one({"_id": project.id}, {"$set": {"repo_url": url}})
     n = sum(1 for t in answers.values() if (t or "").strip())
     return await artifacts.add_revision(
         db,

@@ -14,7 +14,13 @@ def scripted(**by_schema):
     def script(schema_name, system, user):
         out = by_schema.get(schema_name)
         if out is None:
-            return default_output(schema_name, system, user)
+            out = default_output(schema_name, system, user)
+            if schema_name == "orchestrator_output":
+                # graph tests stop after design; implementation/testing need a sandbox and browser
+                for s in out["content"]["stages"]:
+                    if s["stage"] in ("implementation", "testing"):
+                        s["include"], s["approval_required"] = False, False
+            return out
         if callable(out):
             return out(system, user)
         return out
@@ -61,3 +67,22 @@ class Harness:
 @pytest.fixture
 def harness(db):
     return lambda project, script=None: Harness(db, project, script)
+
+
+@pytest.fixture(autouse=True)
+def _design_stage(monkeypatch):
+    """The design agent renders screenshots through a browser; tests use the fake one."""
+    from contextlib import asynccontextmanager
+
+    from app.modules import mcp
+    from app.modules.agents import design
+    from app.modules.mcp.fake import FakeMcp
+
+    design.register()
+    fake = FakeMcp({})
+
+    @asynccontextmanager
+    async def browser():
+        yield fake
+
+    monkeypatch.setattr(mcp, "get_browser", browser)

@@ -66,7 +66,15 @@ def with_plan(out: CodeAgentOutput, plan: dict) -> CodeAgentOutput:
 def _changes_issues(
     files: list[CodeFile], changes: CodeChanges, allowed: set[str] | None
 ) -> list[ValidationIssue]:
-    if allowed is not None and (extra := {c.path for c in changes.changes} - allowed):
+    # An allowed entry ending in "/" is a folder prefix (new files may be created inside it).
+    def ok(path: str) -> bool:
+        return (
+            allowed is None
+            or path in allowed
+            or any(a.endswith("/") and path.startswith(a) for a in allowed)
+        )
+
+    if extra := {c.path for c in changes.changes if not ok(c.path)}:
         msg = f"Only change the failing files; not {sorted(extra)}"
         return [ValidationIssue(severity="error", code="SCOPE", message=msg)]
     try:
@@ -75,7 +83,7 @@ def _changes_issues(
         return [ValidationIssue(severity="error", code="CHANGE", message=str(exc))]
     if not merged:
         return [ValidationIssue(severity="error", code="CHANGE", message="Keep at least one file")]
-    probe = CodeAgentOutput(summary="", project_slug="probe", files=merged)
+    probe = CodeAgentOutput.model_construct(summary="", project_slug="probe", files=merged)
     return manifest_issues(probe, allow_generated=True)
 
 

@@ -104,5 +104,9 @@ async def test_stale_overrides(db, project, owner):
 
 async def test_workflow_lists_all_stages(db, project):
     stages = await workflow(db, project)
-    assert [s.stage for s in stages] == ["requirements", "architecture", "plan", "budget", "code"]
-    assert [s.status for s in stages][2:] == ["BLOCKED", "BLOCKED", "BLOCKED"]
+    assert [s.stage for s in stages] == [
+        "requirements", "architecture", "plan", "budget", "code",
+        "design", "implementation", "testing", "deploy",
+    ]  # fmt: skip
+    assert [s.status for s in stages][2:] == ["BLOCKED"] * 7
+    assert "Add the repository URL and token on the Requirements page" in stages[-1].reasons

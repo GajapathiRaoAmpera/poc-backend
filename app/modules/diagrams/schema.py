@@ -97,6 +97,42 @@ class Viewport(_M):
     zoom: float = 1
 
 
+FieldType = Literal[
+    "uuid", "string", "text", "int", "float", "bool", "datetime", "date", "json", "enum", "decimal"
+]
+
+
+class DataField(_M):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+    type: FieldType
+    pk: bool = False
+    nullable: bool = True
+    unique: bool = False
+    ref: _s(100) | None = None  # "ent_x.field"
+
+
+class Entity(_M):
+    id: Annotated[str, StringConstraints(pattern=r"^ent_[a-z0-9_]{1,40}$")]
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    database_node_id: str
+    description: _s(500) = ""
+    requirement_ids: Annotated[list[ReqId], Field(max_length=50)] = []
+    fields: Annotated[list[DataField], Field(max_length=40)] = []
+
+
+class Relation(_M):
+    id: Annotated[str, StringConstraints(pattern=r"^rel_[a-z0-9_]{1,40}$")]
+    from_entity: str
+    to_entity: str
+    kind: Literal["1-1", "1-n", "n-n"]
+    label: _s(80) = ""
+
+
+class DataModel(_M):
+    entities: Annotated[list[Entity], Field(max_length=40)] = []
+    relations: Annotated[list[Relation], Field(max_length=100)] = []
+
+
 class ArchitectureContent(_M):
     schema_version: Literal["1.0"] = "1.0"
     diagram_type: Literal["system"] = "system"
@@ -106,3 +142,4 @@ class ArchitectureContent(_M):
     decisions: Annotated[list[Decision], Field(max_length=50)] = []
     notes: Annotated[list[Note], Field(max_length=50)] = []
     viewport: Viewport = Viewport()
+    data_model: DataModel = DataModel()

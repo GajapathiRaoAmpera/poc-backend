@@ -129,7 +129,15 @@ def _without_architecture(system, user):
 
     out = default_output("orchestrator_output", system, user)
     for s in out["content"]["stages"]:
-        if s["stage"] in ("architecture", "plan", "budget", "code"):  # all need architecture
+        if s["stage"] in (
+            "architecture",
+            "plan",
+            "budget",
+            "code",
+            "design",
+            "implementation",
+            "testing",
+        ):  # needs architecture
             s["include"] = False
             s["inputs"] = []
             s["approval_required"] = False

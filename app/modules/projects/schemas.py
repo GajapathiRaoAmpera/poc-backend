@@ -1,8 +1,9 @@
+import re
 import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import AfterValidator, BaseModel, StringConstraints
 
 from app.modules.auth.schemas import _Strict
 from app.modules.projects.models import ProjectStatus
@@ -20,6 +21,33 @@ class ProjectUpdate(_Strict):
     name: ProjectName | None = None
     description: Description | None = None
     status: ProjectStatus | None = None
+
+
+REPO_URL_RE = re.compile(r"^https://[\w.-]+/[\w./-]+?(\.git)?$")
+
+
+def check_repo_url(url: str) -> str:
+    if not REPO_URL_RE.match(url) or ".." in url:
+        raise ValueError("Use an https:// repository URL, e.g. https://github.com/acme/app.git")
+    return url
+
+
+class RepoIn(_Strict):
+    url: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, max_length=300),
+        AfterValidator(check_repo_url),
+    ]
+    token: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+        | None
+    ) = None
+
+
+class RepoOut(BaseModel):
+    url: str | None
+    token_set: bool
+    token_last4: str | None
 
 
 class ProjectOut(BaseModel):

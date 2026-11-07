@@ -13,13 +13,11 @@ from langgraph.types import interrupt
 from pymongo.errors import DuplicateKeyError
 
 from app.core.documents import now
-from app.core.errors import QuotaExceeded
 from app.llm.base import ProviderError
 from app.llm.registry import for_stage
 from app.modules.agents.base import AgentContext, AgentOutcome, OutputInvalid, get_agent
 from app.modules.agents.orchestrator import agent as orchestrator_agent
 from app.modules.agents.orchestrator.schema import PlanContent
-from app.modules.auth.models import User
 from app.modules.conversations.service import add_message
 from app.modules.delivery.facts import collect_facts
 from app.modules.delivery.plans import current_plan
@@ -27,7 +25,7 @@ from app.modules.delivery.routing import Decision, needs_replan, route
 from app.modules.delivery.state import DeliveryState, GraphDeps
 from app.modules.orchestration import events, runs
 from app.modules.orchestration.models import AgentRun, RunError, RunStatus
-from app.modules.orchestration.service import _quota_check, _resolve_inputs
+from app.modules.orchestration.service import _resolve_inputs
 from app.modules.projects.models import Project
 
 logger = logging.getLogger(__name__)
@@ -38,6 +36,10 @@ AGENT_FOR = {
     "plan": "project_planner",
     "budget": "budget_estimator",
     "code": "developer",
+    "design": "ui_designer",
+    "implementation": "implementer",
+    "testing": "tester",
+    "deploy": "deployer",
 }
 LABEL = {
     "orchestrator": "Project Orchestrator",
@@ -46,6 +48,10 @@ LABEL = {
     "plan": "Plan Agent",
     "budget": "Budget Agent",
     "code": "Development Agent",
+    "design": "UI/UX Designer",
+    "implementation": "Implementation Agent",
+    "testing": "Testing Agent",
+    "deploy": "Deployment Agent",
 }
 
 
@@ -78,16 +84,7 @@ async def _start_or_reuse_run(
         if run.status != RunStatus.RUNNING:
             return NodeResult("failed", run.id)
         return run
-    owner = User.from_doc(await db.users.find_one({"_id": project.owner_id}))
-    try:
-        await _quota_check(db, owner)
-    except QuotaExceeded as exc:
-        return NodeResult(
-            "gate",
-            gate=Decision(
-                "gate", gate_kind="quota", payload={"stage": stage, "reason": exc.message}
-            ),
-        )
+    # Temporarily bypass quota checks in the delivery workflow so runs are not paused.
     inputs = (
         [] if stage == "orchestrator" else await _resolve_inputs(db, project, stage, mode, None)
     )

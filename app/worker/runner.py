@@ -19,6 +19,7 @@ from pymongo import ReturnDocument
 
 from app.core.db import Db
 from app.core.documents import now
+from app.core.errors import AppError
 from app.llm.base import LLMProvider, ProviderError
 from app.llm.registry import for_stage
 from app.modules.agents.base import (
@@ -245,6 +246,10 @@ class Worker:
                 f"The model's output was still invalid after repairs: {exc}",
                 data={"issues": exc.issues[:10]},
             )
+        except AppError as exc:  # a clear, user-facing failure (e.g. the push was rejected)
+            logger.warning("Agent %s failed on run %s: %s", run.agent, run.id, exc.code)
+            logger.debug("AppError traceback for run %s", run.id, exc_info=True)
+            await self._fail(job, run, project, exc.code, exc.message)
         except Exception:
             logger.exception("Agent %s failed on run %s", run.agent, run.id)
             await self._fail(job, run, project, "INTERNAL", "The agent failed unexpectedly")

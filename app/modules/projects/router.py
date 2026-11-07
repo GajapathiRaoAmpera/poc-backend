@@ -7,7 +7,14 @@ from app.core.pagination import Page, PageParams
 from app.modules.delivery.service import notify
 from app.modules.projects import service
 from app.modules.projects.models import ProjectStatus
-from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
+from app.modules.projects.schemas import (
+    ProjectCreate,
+    ProjectOut,
+    ProjectUpdate,
+    RepoIn,
+    RepoOut,
+    SpecOut,
+)
 from app.modules.projects.spec_schema import Constraints, ProjectSpecification, requirements_scope
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -46,6 +53,18 @@ async def update_project(
 async def delete_project(project_id: uuid.UUID, user: CurrentUser, db: DbSession) -> Response:
     await service.delete_project(db, user, project_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{project_id}/repo")
+async def get_repo(project_id: uuid.UUID, user: CurrentUser, db: DbSession) -> RepoOut:
+    return service.repo_out(await service.get_project_for(db, user, project_id))
+
+
+@router.put("/{project_id}/repo")
+async def save_repo(
+    project_id: uuid.UUID, data: RepoIn, user: CurrentUser, db: DbSession
+) -> RepoOut:
+    return await service.save_repo(db, user, project_id, data)
 
 
 @router.get("/{project_id}/specification")

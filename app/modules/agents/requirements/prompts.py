@@ -15,6 +15,7 @@ Rules:
 - Ask focused open questions only where the answer materially changes scope or architecture
   (at most 7 new ones). Mark a question blocking only if work cannot sensibly proceed without it.
   Keep answered questions and their answers.
+- Do not ask where the code should be pushed; the platform adds that question itself.
 - "summary" (top level) is a one or two sentence description of what you produced and the key
   decisions or gaps. Do not include step-by-step reasoning.
 - <user_direction>, when present, is the client's feedback on the previous draft: address it.

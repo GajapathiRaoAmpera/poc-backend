@@ -129,7 +129,17 @@ def test_default_plan_passes_policy():
 def test_default_plan_includes_all_implemented_with_approval():
     p = default_plan(facts(), None)
     included = {s.stage: s for s in p.stages if s.include}
-    assert list(included) == ["requirements", "architecture", "plan", "budget", "code"]
+    assert list(included) == [
+        "requirements",
+        "architecture",
+        "plan",
+        "budget",
+        "code",
+        "design",
+        "implementation",
+        "testing",
+        "deploy",
+    ]
     assert all(s.approval_required for s in included.values())
     assert p.next_stage == "requirements"
 

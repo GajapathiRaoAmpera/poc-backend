@@ -35,9 +35,62 @@ def _item(c: ArchitectureContent, kind: str, item) -> str:
     return f"{item.id} {item.title}"
 
 
+def data_model_issues(c: ArchitectureContent) -> list[ValidationIssue]:
+    out: list[ValidationIssue] = []
+    dm = c.data_model
+    types = {n.id: n.type for n in c.nodes}
+    ents = {e.id: e for e in dm.entities}
+    for what, vals in (
+        ("table ids", [e.id for e in dm.entities]),
+        ("table names", [e.name.lower() for e in dm.entities]),
+        ("relation ids", [r.id for r in dm.relations]),
+    ):
+        for v, n in Counter(vals).items():
+            if n > 1:
+                out.append(_e("DM_DUPLICATE", f"Two {what} are the same: {v}", "data_model", [v]))
+    for i, e in enumerate(dm.entities):
+        p = f"data_model.entities.{i}"
+        if types.get(e.database_node_id) != "database":
+            out.append(_e("DM_DB_NODE", f"{e.name} must belong to a database component", p, [e.id]))
+        if sum(f.pk for f in e.fields) != 1:
+            out.append(_e("DM_PK", f"{e.name} needs exactly one primary key field", p, [e.id]))
+        for v, n in Counter(f.name.lower() for f in e.fields).items():
+            if n > 1:
+                out.append(_e("DM_DUPLICATE", f"{e.name} has two fields named {v}", p, [e.id]))
+        for j, f in enumerate(e.fields):
+            if f.ref is None:
+                continue
+            tid, _, tf = f.ref.partition(".")
+            if tid not in ents or tf not in {x.name for x in ents[tid].fields}:
+                out.append(
+                    _e(
+                        "DM_REF",
+                        f"{e.name}.{f.name} refers to {f.ref}, which doesn't exist",
+                        f"{p}.fields.{j}",
+                        [e.id],
+                    )
+                )
+    for i, r in enumerate(dm.relations):
+        for end in (r.from_entity, r.to_entity):
+            if end not in ents:
+                out.append(
+                    _e(
+                        "DM_REF",
+                        f"Relation {r.id} points to a missing table {end}",
+                        f"data_model.relations.{i}",
+                        [r.id, end],
+                    )
+                )
+    if "database" in types.values() and not dm.entities:
+        out.append(
+            _e("DM_MISSING", "The architecture has a database but no tables in the data model")
+        )
+    return out
+
+
 def validate_structure(c: ArchitectureContent) -> list[ValidationIssue]:
     """Save-blocking: the diagram must be internally consistent."""
-    out: list[ValidationIssue] = []
+    out: list[ValidationIssue] = data_model_issues(c)
     for name, items in (
         ("nodes", c.nodes),
         ("edges", c.edges),

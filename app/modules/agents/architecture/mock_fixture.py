@@ -36,6 +36,66 @@ def _edge(id_, s, t, label, protocol=None):
     }
 
 
+def _f(name, type_, pk=False, ref=None):
+    return {"name": name, "type": type_, "pk": pk, "nullable": not pk, "unique": pk, "ref": ref}
+
+
+def _entity(id_, name, fields, reqs=()):
+    return {
+        "id": id_,
+        "name": name,
+        "database_node_id": "n_db",
+        "description": "",
+        "requirement_ids": list(reqs),
+        "fields": fields,
+    }
+
+
+def _data_model(fr):
+    return {
+        "entities": [
+            _entity("ent_user", "users", [_f("id", "uuid", True), _f("email", "string")], fr[:1]),
+            _entity(
+                "ent_project",
+                "projects",
+                [
+                    _f("id", "uuid", True),
+                    _f("owner_id", "uuid", ref="ent_user.id"),
+                    _f("name", "string"),
+                ],
+                fr[:1],
+            ),
+            _entity(
+                "ent_task",
+                "tasks",
+                [
+                    _f("id", "uuid", True),
+                    _f("project_id", "uuid", ref="ent_project.id"),
+                    _f("status", "enum"),
+                    _f("created_at", "datetime"),
+                ],
+                fr[:1],
+            ),
+        ],
+        "relations": [
+            {
+                "id": "rel_user_projects",
+                "from_entity": "ent_user",
+                "to_entity": "ent_project",
+                "kind": "1-n",
+                "label": "owns",
+            },
+            {
+                "id": "rel_project_tasks",
+                "from_entity": "ent_project",
+                "to_entity": "ent_task",
+                "kind": "1-n",
+                "label": "contains",
+            },
+        ],
+    }
+
+
 def architecture_output(system: str, user: str) -> dict:
     reqs = json.loads(_between(user, "approved_requirements") or '{"requirements": []}')
     ids = [r["id"] for r in reqs.get("requirements", [])]
@@ -75,6 +135,7 @@ def architecture_output(system: str, user: str) -> dict:
             ],
             "notes": [],
             "viewport": {"x": 0, "y": 0, "zoom": 1},
+            "data_model": _data_model(fr),
         },
         "summary": "[Mock] Modular monolith: web app, API, background worker and database.",
     }

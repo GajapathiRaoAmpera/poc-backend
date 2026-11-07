@@ -5,7 +5,7 @@ from fastapi import APIRouter, Header, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.core.deps import CurrentUser, DbSession
-from app.core.errors import NotFound
+from app.core.errors import Conflict, NotFound
 from app.core.pagination import Page, PageParams
 from app.modules.artifacts import service as artifacts
 from app.modules.orchestration import service, sse
@@ -55,6 +55,37 @@ async def start_run(
 ) -> JSONResponse:
     project = await get_project_for(db, user, project_id)
     run, created = await service.start_stage(db, project, stage, body.mode, user)
+    return JSONResponse(
+        RunOut.of(run).model_dump(mode="json"),
+        status_code=status.HTTP_202_ACCEPTED if created else status.HTTP_200_OK,
+    )
+
+
+@router.post("/stages/testing/send-failures", response_model=RunOut)
+async def send_failures(project_id: uuid.UUID, user: CurrentUser, db: DbSession) -> JSONResponse:
+    """Start an implementation run whose direction is the failed cases' titles and evidence."""
+    project = await get_project_for(db, user, project_id)
+    rev = await artifacts.latest_revision(db, project, "testing")
+    failed = [r for r in (rev.content["results"] if rev else []) if not r["passed"]]
+    if not failed:
+        raise Conflict("There are no failed test cases to send")
+    direction = "Fix these failing test cases:\n" + "\n".join(
+        f"- {r['id']} {r['title']}: {r['evidence']}" for r in failed
+    )
+    run, created = await service.start_stage(
+        db, project, "implementation", "generate", user, instruction=direction[:4000]
+    )
+    return JSONResponse(
+        RunOut.of(run).model_dump(mode="json"),
+        status_code=status.HTTP_202_ACCEPTED if created else status.HTTP_200_OK,
+    )
+
+
+@router.post("/stages/deploy/run", response_model=RunOut)
+async def run_deploy(project_id: uuid.UUID, user: CurrentUser, db: DbSession) -> JSONResponse:
+    """Push to repo: deploy is never auto-routed, it starts only from an explicit user action."""
+    project = await get_project_for(db, user, project_id)
+    run, created = await service.start_stage(db, project, "deploy", "generate", user)
     return JSONResponse(
         RunOut.of(run).model_dump(mode="json"),
         status_code=status.HTTP_202_ACCEPTED if created else status.HTTP_200_OK,

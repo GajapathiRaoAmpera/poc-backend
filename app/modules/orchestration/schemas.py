@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 from app.modules.artifacts.models import SourceRef, ValidationIssue
 from app.modules.orchestration.models import AgentRun, Attempt, RunError, RunEvent
 
-StageName = Literal["requirements", "architecture", "plan", "budget", "code"]
+StageName = Literal[
+    "requirements", "architecture", "plan", "budget", "code",
+    "design", "implementation", "testing", "deploy",
+]  # fmt: skip
 
 
 class StartRunIn(BaseModel):

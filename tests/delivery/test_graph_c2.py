@@ -54,7 +54,7 @@ async def _worker_flow(db, stop_at=None):
     w = Worker(db, provider_factory=lambda: provider, heartbeat_s=0.05, poll_s=0.01)
     await delivery.start_delivery(db, project, owner)
     await w.run_once()
-    for stage in ("requirements", "architecture", "plan", "budget", "code"):
+    for stage in ("requirements", "architecture", "plan", "budget", "code", "design"):
         if stage == stop_at:
             break
         t = await get_thread(db, project)
@@ -124,6 +124,8 @@ async def test_rates_reverted_is_not_work(db, harness):
     await h.resume("approved:budget")
     await artifacts.approve(db, project, "code", 1, owner, None)
     await h.resume("approved:code")
+    await artifacts.approve(db, project, "design", 1, owner, None)
+    await h.resume("approved:design")
     await _new_rates(db, project, owner)  # stale: "Rates changed"
     await save_override(db, project, owner, None)  # back to the default the budget used
     assert await h.start("rates_changed") is None

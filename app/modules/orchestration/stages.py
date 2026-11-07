@@ -10,20 +10,31 @@ from app.modules.artifacts.models import Artifact, Revision
 from app.modules.orchestration.models import AgentRun, RunStatus
 from app.modules.projects.models import Project
 
-STAGES = ["requirements", "architecture", "plan", "budget", "code"]
-AVAILABLE = {"requirements", "architecture", "plan", "budget", "code"}
+STAGES = [
+    "requirements", "architecture", "plan", "budget", "code",
+    "design", "implementation", "testing", "deploy",
+]  # fmt: skip
+AVAILABLE = set(STAGES)
 AGENTS = {
     "requirements": "requirements_analyst",
     "architecture": "solution_architect",
     "plan": "project_planner",
     "budget": "budget_estimator",
     "code": "developer",
+    "design": "ui_designer",
+    "implementation": "implementer",
+    "testing": "tester",
+    "deploy": "deployer",
 }
 DEPENDS_ON = {
     "architecture": ["requirements"],
     "plan": ["requirements", "architecture"],
     "budget": ["plan", "architecture"],
     "code": ["architecture", "plan"],
+    "design": ["requirements", "architecture"],
+    "implementation": ["code", "design"],
+    "testing": ["implementation"],
+    "deploy": ["testing"],
 }
 LABEL = {
     "requirements": "Requirements",
@@ -31,6 +42,10 @@ LABEL = {
     "plan": "Project plan",
     "budget": "Budget",
     "code": "Scaffold",
+    "design": "UI/UX design",
+    "implementation": "Implementation",
+    "testing": "Testing",
+    "deploy": "Deploy",
 }
 
 # stage → "does this content still need user input?" (registered by agent modules)
@@ -69,6 +84,8 @@ async def dependency_blockers(db: Db, project: Project, stage: str) -> list[str]
             reasons.append(f"{LABEL[dep]} must be approved first")
         elif art.stale:
             reasons.append(f"{LABEL[dep]} is stale and must be re-approved: {art.stale_reason}")
+    if stage == "deploy" and not (project.repo_url and project.repo_token_enc):
+        reasons.append("Add the repository URL and token on the Requirements page")
     return reasons
 
 

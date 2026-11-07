@@ -6,7 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.modules.projects.spec_schema import ProjectSpecification
 
-Stage = Literal["requirements", "architecture", "plan", "budget", "code"]
+Stage = Literal[
+    "requirements", "architecture", "plan", "budget", "code",
+    "design", "implementation", "testing", "deploy",
+]  # fmt: skip
 
 
 def _text(n: int):

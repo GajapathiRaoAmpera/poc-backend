@@ -71,7 +71,7 @@ async def test_resume_after_approval_runs_architecture(db, harness):
 def _without_plan_and_budget(system, user):
     out = default_output("orchestrator_output", system, user)
     for s in out["content"]["stages"]:
-        if s["stage"] in ("plan", "budget", "code"):
+        if s["stage"] in ("plan", "budget", "code", "design", "implementation", "testing"):
             s.update(include=False, inputs=[], approval_required=False)
     return out
 
@@ -125,13 +125,14 @@ async def test_intake_questions_gate_then_user_message_replans(db, harness):
     assert spec["origin"] == "orchestrator"
 
 
-async def test_quota_gate(db, harness):
+async def test_quota_does_not_pause_delivery_workflow(db, harness):
     owner, project = await setup_project(db)
     await db.users.update_one({"_id": owner.id}, {"$set": {"daily_run_limit": 1}})
     h = harness(project, NO_QUESTIONS)
     pending = await h.start()
-    assert pending["kind"] == "quota" and pending["stage"] == "requirements"
-    assert await h.runs("requirements") == []
+    assert pending["kind"] == "approval" and pending["stage"] == "requirements"
+    assert len(await h.runs("orchestrator")) == 1
+    assert len(await h.runs("requirements")) == 1
 
 
 async def test_failed_stage_replans_then_needs_input(db, harness):

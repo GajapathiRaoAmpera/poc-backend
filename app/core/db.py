@@ -76,6 +76,9 @@ INDEXES: dict[str, list[IndexModel]] = {
     "project_specifications": [
         IndexModel([("project_id", ASCENDING), ("revision", ASCENDING)], unique=True)
     ],
+    "media": [IndexModel([("project_id", ASCENDING)])],
+    # _id = project id; the idle reaper scans by last_seen.
+    "sandboxes": [IndexModel([("last_seen", ASCENDING)])],
     "audit_logs": [IndexModel([("created_at", DESCENDING)])],
     "artifacts": [IndexModel([("project_id", ASCENDING), ("kind", ASCENDING)], unique=True)],
     "artifact_revisions": [

@@ -2,6 +2,24 @@ from app.modules.agents.requirements.schema import RequirementsContent
 from app.modules.artifacts.models import ValidationIssue
 
 MAX_NEW_QUESTIONS = 7
+REPO_QUESTION = "Which git repository should the finished code be pushed to?"
+
+
+def ensure_repo_question(content: dict) -> dict:
+    """Add the non-blocking repo question once; it only gates the deploy stage."""
+    qs = content.setdefault("open_questions", [])
+    if not any(q["question"] == REPO_QUESTION for q in qs):
+        n = max([int(q["id"][2:]) for q in qs] + [0]) + 1
+        qs.append(
+            {
+                "id": f"Q-{n:03d}",
+                "question": REPO_QUESTION,
+                "why_it_matters": "The Deployment agent pushes the finished code there.",
+                "blocking": False,
+                "answer": None,
+            }
+        )
+    return content
 
 
 def _err(code: str, message: str, path: str | None = None) -> ValidationIssue:

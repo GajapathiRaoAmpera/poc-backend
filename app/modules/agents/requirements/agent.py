@@ -1,7 +1,7 @@
 from app.modules.agents.base import AgentContext, AgentOutcome
 from app.modules.agents.requirements import prompts
 from app.modules.agents.requirements.schema import RequirementsAgentOutput
-from app.modules.agents.requirements.validate import agent_issues
+from app.modules.agents.requirements.validate import agent_issues, ensure_repo_question
 from app.modules.agents.structured import call_structured
 from app.modules.artifacts import service as artifacts
 
@@ -62,14 +62,14 @@ async def draft(ctx: AgentContext) -> AgentOutcome:
         ctx.db,
         ctx.project,
         "requirements",
-        out.content.model_dump(mode="json"),
+        ensure_repo_question(out.content.model_dump(mode="json")),
         sources=[spec_ref],
         origin="agent",
         summary=out.summary,
         created_by=None,
         run_id=ctx.run.id,
     )
-    c = out.content
+    c = out.content  # counts below omit the appended repo question
     await ctx.emit(
         "step",
         f"Saved requirements revision {rev.revision} ({len(c.requirements)} "

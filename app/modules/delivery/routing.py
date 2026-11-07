@@ -9,7 +9,10 @@ from app.modules.delivery.facts import Facts, StageFacts
 
 MAX_AUTO_RUNS = 3
 
-Node = Literal["requirements", "architecture", "plan", "budget", "code", "gate", "end"]
+Node = Literal[
+    "requirements", "architecture", "plan", "budget", "code",
+    "design", "implementation", "testing", "deploy", "gate", "end",
+]  # fmt: skip
 NO_RATES = "Set rates before the budget can be calculated"
 
 
@@ -50,7 +53,8 @@ def route(plan: PlanContent, facts: Facts, loops: dict[str, int]) -> Decision:
     if blocking:
         return _gate("intake_questions", questions=blocking)
     included = {s.stage for s in plan.stages if s.include and s.stage in IMPLEMENTED}
-    for stage in (s for s in ORDER if s in included):
+    # deploy is never auto-routed: it starts only from POST .../stages/deploy/run
+    for stage in (s for s in ORDER if s in included and s != "deploy"):
         f = facts.stages[stage]
         if f.active_run:
             return _gate("stage_busy", stage=stage)

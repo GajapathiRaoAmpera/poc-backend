@@ -22,7 +22,15 @@ APPROVED = {**DRAFT, "approved_revision": 2, "approved_is_latest": True}
 def plan(f, architecture=True, missing=()):
     p = default_plan(f, None)
     for s in p.stages:
-        if s.stage in ("architecture", "plan", "budget", "code"):  # all need architecture
+        if s.stage in (
+            "architecture",
+            "plan",
+            "budget",
+            "code",
+            "design",
+            "implementation",
+            "testing",
+        ):  # needs architecture
             s.include = architecture
     p.missing_info = list(missing)
     return p
@@ -101,7 +109,19 @@ def test_architecture_changes_requested_regenerates_with_comment():
 
 
 def test_all_approved_ends():
-    stages = dict.fromkeys(("requirements", "architecture", "plan", "budget", "code"), APPROVED)
+    stages = dict.fromkeys(
+        (
+            "requirements",
+            "architecture",
+            "plan",
+            "budget",
+            "code",
+            "design",
+            "implementation",
+            "testing",
+        ),
+        APPROVED,
+    )
     assert go(**stages).node == "end"
 
 

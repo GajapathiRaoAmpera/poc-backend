@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import SecretStr
@@ -39,6 +40,8 @@ class Settings(BaseSettings):
     groq_effort: dict[str, Effort] = {}
     groq_chat_effort_drop: bool = True
     gemini_api_key: SecretStr | None = None
+    # Fernet key encrypting stored repo tokens; unset = repo tokens unavailable.
+    secret_box_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"
     # Voice front-end (Gemini Live). Uses GEMINI_API_KEY even when LLM_PROVIDER=groq.
     voice_enabled: bool = True
@@ -47,8 +50,12 @@ class Settings(BaseSettings):
     # Per-agent voice overrides (JSON), merged over the built-in distinct voices.
     gemini_live_voices: dict[str, str] = {}
     voice_daily_session_limit: int = 100
+    # Set to 0 to temporarily disable the platform default; per-user limits still apply.
     platform_daily_run_limit: int = 50
     agent_timeout_s: int = 180
+    # Generated apps run in Docker (spec §5.2); one work dir per project under sandbox_root.
+    sandbox_root: Path = Path("/tmp/ampera-sandbox")  # noqa: S108 - local POC default
+    sandbox_enabled: bool = True
 
     @property
     def trusted_proxies(self) -> list[str]:

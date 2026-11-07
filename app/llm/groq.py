@@ -6,12 +6,14 @@ Best-effort schema mode is used; callers always re-validate the result.
 
 import copy
 import json
+import logging
 from typing import Any
 
 import httpx
 
 from app.llm.base import LLMResult, ProviderError
 
+logger = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 # Prompts here measure ~4.5 characters per token; the pre-flight only catches clear overruns
 # (Groq's own 413 covers the borderline ones with the same error).
@@ -106,6 +108,21 @@ class GroqProvider:
             ) from exc
 
         if resp.status_code >= 400:
+            # Server log only, never shown to users: Groq's reason (TPM, TPD, json_validate_failed).
+            try:
+                err = resp.json().get("error") or {}
+            except ValueError:
+                err = {}
+            logger.warning(
+                "Groq %s %s: type=%s code=%s retry_after=%s remaining_tokens=%s msg=%.300s",
+                resp.status_code,
+                self.model,
+                err.get("type"),
+                err.get("code"),
+                resp.headers.get("retry-after"),
+                resp.headers.get("x-ratelimit-remaining-tokens"),
+                err.get("message"),
+            )
             code, retryable = _STATUS.get(resp.status_code, ("PROVIDER_ERROR", True))
             if code == "TOO_LARGE":
                 if self.max_input_tokens and estimate <= self.max_input_tokens:

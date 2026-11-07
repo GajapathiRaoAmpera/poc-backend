@@ -10,11 +10,17 @@ from app.core.errors import Conflict, GraphBusy, NotPaused
 from app.modules.auth.models import User
 from app.modules.delivery.threads import DeliveryThread, get_thread, set_thread
 from app.modules.orchestration.models import Job
+from app.modules.orchestration.service import LONG_STAGES
 from app.modules.projects.models import Project
 
 # Thread pauses the user must explicitly resume; ordinary actions don't restart them.
 STICKY = {"cancelled"}
 REPLAN_TRIGGER = "user_message"
+
+
+def graph_job_timeout() -> int:
+    # the graph runs the stage agent inline, so it must outlast the longest stage
+    return get_settings().agent_timeout_s * max(3, *LONG_STAGES.values())
 
 
 def graph_key(project: Project) -> str:
@@ -27,7 +33,7 @@ async def _enqueue(db: Db, project: Project, mode: str, trigger: str, message: s
         type="graph_step",
         idempotency_key=graph_key(project),
         input={"mode": mode, "trigger": trigger, "message": message},
-        timeout_s=3 * get_settings().agent_timeout_s,
+        timeout_s=graph_job_timeout(),
     )
     try:
         await db.jobs.insert_one(job.to_doc())

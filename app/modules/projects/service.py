@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pymongo.errors import DuplicateKeyError
 
+from app.core import secret_box
 from app.core.db import Db, in_transaction
 from app.core.documents import now
 from app.core.errors import AppError, Conflict, NotFound
@@ -11,7 +12,14 @@ from app.core.pagination import _PageParams
 from app.modules.artifacts.service import mark_dependents_stale, mark_stale
 from app.modules.auth.models import User, UserRole
 from app.modules.projects.models import Project, ProjectSpecification, ProjectStatus
-from app.modules.projects.schemas import ProjectCreate, ProjectOut, ProjectUpdate, SpecOut
+from app.modules.projects.schemas import (
+    ProjectCreate,
+    ProjectOut,
+    ProjectUpdate,
+    RepoIn,
+    RepoOut,
+    SpecOut,
+)
 from app.modules.projects.spec_schema import ProjectSpecification as SpecData
 from app.modules.projects.spec_schema import requirements_scope
 from app.modules.ratecard.service import effective
@@ -238,3 +246,27 @@ async def save_preferences(
         await mark_stale(db, project, "plan", "Team or start date changed")
     specs = await latest_specs(db, [project.id])
     return to_out(project, specs.get(project.id))
+
+
+def repo_out(project: Project) -> RepoOut:
+    token = secret_box.open_(project.repo_token_enc) if project.repo_token_enc else None
+    return RepoOut(
+        url=project.repo_url, token_set=token is not None, token_last4=token[-4:] if token else None
+    )
+
+
+async def save_repo(db: Db, user: User, project_id: uuid.UUID, data: RepoIn) -> RepoOut:
+    project = await get_project_for(db, user, project_id)
+    project.repo_url = data.url
+    changes: dict[str, Any] = {"repo_url": data.url, "updated_at": now()}
+    if data.token is not None:  # None keeps the existing token
+        project.repo_token_enc = changes["repo_token_enc"] = secret_box.seal(data.token)
+    await db.projects.update_one({"_id": project.id}, {"$set": changes})
+    return repo_out(project)
+
+
+async def repo_token(db: Db, project: Project) -> str | None:
+    """Plaintext token for the Deployment agent only; never log or return it."""
+    doc = await db.projects.find_one({"_id": project.id}, {"repo_token_enc": 1})
+    enc = doc.get("repo_token_enc") if doc else None
+    return secret_box.open_(enc) if enc else None

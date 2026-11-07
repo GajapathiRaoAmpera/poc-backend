@@ -2,7 +2,10 @@ async def test_full_flow_over_http(owner_client, project_id, work):
     c, base = owner_client, f"/api/v1/projects/{project_id}"
 
     wf = (await c.get(f"{base}/workflow")).json()
-    assert [s["stage"] for s in wf] == ["requirements", "architecture", "plan", "budget", "code"]
+    assert [s["stage"] for s in wf] == [
+        "requirements", "architecture", "plan", "budget", "code",
+        "design", "implementation", "testing", "deploy",
+    ]  # fmt: skip
     assert wf[0]["status"] == "NOT_STARTED" and wf[1]["status"] == "BLOCKED"
 
     r = await c.post(f"{base}/stages/requirements/runs", json={"mode": "generate"})
@@ -71,3 +74,12 @@ async def test_cancel_and_retry(owner_client, project_id):
     assert r.status_code == 200 and r.json()["status"] == "CANCELLED"
     r = await owner_client.post(f"{base}/runs/{run['id']}/retry")
     assert r.status_code == 202 and r.json()["retry_of"] == run["id"]
+
+
+async def test_deploy_run_is_blocked_until_testing_and_repo(owner_client, project_id):
+    r = await owner_client.post(f"/api/v1/projects/{project_id}/stages/deploy/run")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "STAGE_BLOCKED"
+    assert r.json()["error"]["details"]["reasons"] == [
+        "Testing must be approved first",
+        "Add the repository URL and token on the Requirements page",
+    ]

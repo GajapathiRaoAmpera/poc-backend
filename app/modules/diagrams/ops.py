@@ -5,7 +5,15 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from app.modules.diagrams.schema import ArchitectureContent, Decision, Edge, Group, Node
+from app.modules.diagrams.schema import (
+    ArchitectureContent,
+    Decision,
+    Edge,
+    Entity,
+    Group,
+    Node,
+    Relation,
+)
 
 
 class _Op(BaseModel):
@@ -54,8 +62,39 @@ class AddDecision(_Op):
     decision: Decision
 
 
+class UpsertEntity(_Op):
+    op: Literal["upsert_entity"]
+    entity: Entity
+
+
+class RemoveEntity(_Op):
+    op: Literal["remove_entity"]
+    id: str
+
+
+class UpsertRelation(_Op):
+    op: Literal["upsert_relation"]
+    relation: Relation
+
+
+class RemoveRelation(_Op):
+    op: Literal["remove_relation"]
+    id: str
+
+
 Op = Annotated[
-    AddNode | UpdateNode | RemoveNode | AddEdge | UpdateEdge | RemoveEdge | AddGroup | AddDecision,
+    AddNode
+    | UpdateNode
+    | RemoveNode
+    | AddEdge
+    | UpdateEdge
+    | RemoveEdge
+    | AddGroup
+    | AddDecision
+    | UpsertEntity
+    | RemoveEntity
+    | UpsertRelation
+    | RemoveRelation,
     Field(discriminator="op"),
 ]
 _ops_adapter = TypeAdapter(list[Op])
@@ -90,6 +129,7 @@ def _label(d: dict, coll: str, item_id: str) -> str:
 
 def apply_ops(base: ArchitectureContent, ops: list[Op]) -> ArchitectureContent:
     d = copy.deepcopy(base.model_dump(mode="json"))
+    dm = d["data_model"]
     for i, op in enumerate(ops):
         if isinstance(op, AddNode):
             if _find(d["nodes"], op.node.id) is not None:
@@ -139,6 +179,33 @@ def apply_ops(base: ArchitectureContent, ops: list[Op]) -> ArchitectureContent:
             if _find(d["decisions"], op.decision.id) is not None:
                 raise OpError(i, f"Decision {op.decision.id} {op.decision.title} already exists")
             d["decisions"].append(op.decision.model_dump(mode="json"))
+        elif isinstance(op, UpsertEntity | UpsertRelation):
+            coll, item = (
+                ("entities", op.entity)
+                if isinstance(op, UpsertEntity)
+                else ("relations", op.relation)
+            )
+            items, new = dm[coll], item.model_dump(mode="json")
+            idx = _find(items, item.id)
+            if idx is None:
+                items.append(new)
+            else:
+                items[idx] = new
+        elif isinstance(op, RemoveEntity):
+            if _find(dm["entities"], op.id) is None:
+                raise OpError(i, "That table isn't in the data model", op.id)
+            dm["entities"] = [e for e in dm["entities"] if e["id"] != op.id]
+            dm["relations"] = [
+                r for r in dm["relations"] if op.id not in (r["from_entity"], r["to_entity"])
+            ]
+            for e in dm["entities"]:
+                for f in e["fields"]:
+                    if f["ref"] and f["ref"].split(".")[0] == op.id:
+                        f["ref"] = None
+        elif isinstance(op, RemoveRelation):
+            if _find(dm["relations"], op.id) is None:
+                raise OpError(i, "That relation isn't in the data model", op.id)
+            dm["relations"] = [r for r in dm["relations"] if r["id"] != op.id]
     try:
         return ArchitectureContent.model_validate(d)
     except ValidationError as exc:

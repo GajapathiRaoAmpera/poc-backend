@@ -131,6 +131,17 @@ def good_architecture(**over):
         ],
         "notes": [],
         "viewport": {"x": 0, "y": 0, "zoom": 1},
+        "data_model": {
+            "entities": [
+                {
+                    "id": "ent_user",
+                    "name": "users",
+                    "database_node_id": "n_db",
+                    "fields": [{"name": "id", "type": "uuid", "pk": True}],
+                }
+            ],
+            "relations": [],
+        },
     }
     content.update(over)
     return {"content": content, "summary": "API-centric architecture with async worker."}

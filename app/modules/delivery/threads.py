@@ -20,6 +20,10 @@ STAGE_LABEL = {
     "plan": "plan",
     "budget": "budget",
     "code": "scaffold",
+    "design": "design",
+    "implementation": "implementation",
+    "testing": "testing",
+    "deploy": "deploy",
 }
 
 

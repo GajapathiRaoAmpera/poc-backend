@@ -27,6 +27,9 @@ class Project(Timestamped):
     preferences: dict[str, Any] | None = None
     # Per-project rate card override (RateCard JSON); None = use the platform default.
     rate_card: dict[str, Any] | None = None
+    # Git remote for the Deployment agent; the token is Fernet-sealed (app.core.secret_box).
+    repo_url: str | None = None
+    repo_token_enc: str | None = None
 
 
 class ProjectSpecification(Document):

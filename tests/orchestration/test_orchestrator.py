@@ -3,6 +3,7 @@ import uuid
 
 import pytest
 
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.modules.artifacts import service as artifacts
 from app.modules.artifacts.models import SourceRef
@@ -67,8 +68,9 @@ async def test_concurrent_starts_create_one_run(db, project, owner):
     assert await db.agent_runs.count_documents({}) == 1
 
 
-async def test_quota(db, project, owner):
+async def test_quota(db, project, owner, monkeypatch):
     await add_spec(db, project)
+    monkeypatch.setattr(get_settings(), "platform_daily_run_limit", 50)
     for _ in range(50):
         await db.agent_runs.insert_one(
             {
@@ -83,6 +85,25 @@ async def test_quota(db, project, owner):
     with pytest.raises(AppError) as e:
         await start_stage(db, project, "requirements", "generate", owner)
     assert e.value.code == "QUOTA_EXCEEDED" and e.value.status == 429
+
+
+async def test_platform_quota_can_be_disabled(db, project, owner, monkeypatch):
+    await add_spec(db, project)
+    monkeypatch.setattr(get_settings(), "platform_daily_run_limit", 0)
+    for _ in range(50):
+        await db.agent_runs.insert_one(
+            {
+                "_id": uuid.uuid4(),
+                "project_id": project.id,
+                "created_by": owner.id,
+                "created_at": runs.now(),
+                "status": "SUCCEEDED",
+                "stage": "requirements",
+            }
+        )
+
+    run, created = await start_stage(db, project, "requirements", "generate", owner)
+    assert created and run.status == RunStatus.QUEUED
 
 
 async def test_user_specific_limit(db, project):

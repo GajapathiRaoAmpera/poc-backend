@@ -6,7 +6,10 @@ from langgraph.graph import END, START, StateGraph
 from app.modules.delivery.nodes import gate_node, orchestrator_node, stage_node
 from app.modules.delivery.state import DeliveryState, GraphDeps
 
-STAGE_NODES = ("requirements", "architecture", "plan", "budget", "code")
+STAGE_NODES = (
+    "requirements", "architecture", "plan", "budget", "code",
+    "design", "implementation", "testing", "deploy",
+)  # fmt: skip
 
 
 def _next(state: DeliveryState) -> str:

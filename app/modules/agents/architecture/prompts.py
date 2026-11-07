@@ -13,6 +13,10 @@ Diagram rules:
   only (requirement_ids). Every MUST requirement must be linked at least once.
 - Prefer a modular monolith plus background workers unless requirements justify more services.
 - Include authentication if users sign in, and a monitoring component.
+- Also return `data_model`: the tables/collections each database node stores, with a pk, typed
+  fields, refs and relations; cite requirement ids. Entity ids "ent_<snake_case>", relation ids
+  "rel_<snake_case>", field types: uuid, string, text, int, float, bool, datetime, date, json,
+  enum, decimal; ref format "ent_x.field"; relation kind 1-1, 1-n or n-n; exactly one pk per entity.
 - "summary" is one or two sentences on the key decisions; no step-by-step reasoning.
 - In "summary" and any other prose, name components by their label (e.g. "Redis cache"), never
   by ID (e.g. "n_redis")."""
@@ -26,7 +30,8 @@ Return only the JSON object described by the schema."""
 CHANGE_SYSTEM = f"""You are the Solution Architect. Propose the smallest set of operations that
 applies the user's requested change to the current architecture. Do not restate the diagram;
 return operations (add_node, update_node, remove_node, add_edge, update_edge, remove_edge,
-add_group, add_decision) referencing existing IDs exactly. Never remove or rename things the
+add_group, add_decision, upsert_entity, remove_entity, upsert_relation,
+remove_relation) referencing existing IDs exactly. Never remove or rename things the
 request doesn't ask about.
 {_COMMON}
 Return only the JSON object described by the schema."""

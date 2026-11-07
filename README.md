@@ -6,7 +6,9 @@ Design: [`docs/specs/2026-10-23-foundation-design.md`](docs/specs/2026-10-23-fou
 ## Prerequisites
 
 - Python 3.12 and [uv](https://docs.astral.sh/uv/)
-- Docker (for the local test database)
+- Docker: the local test database, and the **Implementation sandbox** (generated apps run in containers)
+- Node.js 22 with `npx`: the UI/UX Designer and Testing agents start `@playwright/mcp` for screenshots and browser checks
+- git: the Deploy agent commits and pushes the approved code
 - A MongoDB database: Atlas in real use (must be a replica set — Atlas always is — because
   user deletion and the last-Super-Admin check use transactions)
 
@@ -28,6 +30,8 @@ Copy `.env.example` to `.env`:
 | `AGENT_TIMEOUT_S` | Per-attempt agent timeout in seconds (default 180). |
 | `APP_ORIGIN` | Origin of the web app, e.g. `http://localhost:3000`. Mutating requests from other origins are rejected. |
 | `ENVIRONMENT` | `development`, `test` or `production` (default when unset). Cookies are `Secure` and reset links are never logged outside development/test. |
+| `SECRET_BOX_KEY` | Fernet key that encrypts stored repository tokens. Generate one with `python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"`. Unset = repository tokens can't be saved (503). Changing it makes saved tokens unreadable; users re-enter them. |
+| `SANDBOX_ENABLED` / `SANDBOX_ROOT` | Implementation sandbox switch (default `true`) and work directory (default `/tmp/ampera-sandbox`). |
 | `TRUSTED_PROXY_IPS` | Comma-separated IPs of reverse proxies allowed to set `X-Forwarded-For`. **Set this to the Next.js server's IP when it runs on a different host**, otherwise every user shares one IP for login throttling. |
 
 ## Run
@@ -100,12 +104,41 @@ Design: [`docs/specs/2026-10-28-c3-scaffold-design.md`](docs/specs/2026-10-28-c3
   returns a file manifest. Code checks it (relative paths only, no `..`/`.git`, no `.env`/keys, size
   limits), adds `PLAN.md` from the approved plan, and renders **one bash script** that only writes files.
 - **Validation** is static: `bash -n` and `shellcheck -S warning` read the script and every shell file
-  from stdin. **The platform never executes generated code.** Findings block approval; a missing
+  from stdin. **The platform never executes the scaffold script** (you run it); generated code runs only inside the locked-down Docker sandbox of the Implementation stage (D1). Findings block approval; a missing
   shellcheck fails closed (`VALIDATOR_UNAVAILABLE`). `shellcheck-py` (a normal dependency) ships the binary.
 - **Repair** sends only the failing files and their findings back to the agent, at most 2 rounds.
 - Download: `GET /api/v1/projects/{id}/artifacts/code/revisions/{n}/script` (owner only; rendered from the
   stored manifest; `X-Content-SHA256`). The script refuses a non-empty target directory.
 - Architecture or plan changes mark the scaffold stale; rate changes do not.
+
+## Design, implementation, testing and deploy (D1)
+
+Design: [`docs/specs/2026-11-06-d1-design-build-test-deploy-design.md`](docs/specs/2026-11-06-d1-design-build-test-deploy-design.md)
+
+After the scaffold is approved the graph runs four more stages, each paused for approval:
+
+- **UI/UX design** (`ui_designer`, `design`): up to 12 screen mockups as allowlisted offline HTML
+  (no script, no external URLs), a theme and flows; screenshots at 1280×800 via Playwright MCP.
+- **Implementation** (`implementer`, `implementation`): a full app manifest plus `sandbox.json`, run in
+  Docker with `--cap-drop ALL --security-opt no-new-privileges --memory 1g --cpus 1 --pids-limit 256
+  --user 1000:1000`, ports bound to `127.0.0.1` only, at most 4 services, health timeout 120 s, idle stop
+  after 30 min, up to 2 repair rounds from the failing service's logs.
+- **Testing** (`tester`, `testing`): one case per requirement, run by the model through Playwright MCP or
+  HTTP against the sandbox only (navigation outside the sandbox origins is refused). Approval is blocked
+  while a MUST case fails.
+- **Deploy** (`deployer`, `deploy`): user-triggered from the Deploy page. Commits the approved
+  implementation and pushes it to `refs/heads/ampera/<slug>-r<rev>` (never force). The repository URL and
+  token are set on the Requirements page; the token is Fernet-encrypted (`SECRET_BOX_KEY`), passed to git
+  only through `GIT_ASKPASS`, and scrubbed from errors.
+
+Shortcuts (local POC only):
+- `shortcut: open egress for npm/pip installs, upgrade to an allowlisted proxy before multi-tenant hosting.`
+- `shortcut: direct localhost ports work for local POC only, upgrade to an authenticated reverse proxy for hosted use.`
+- `shortcut: in-process sandbox locks, single-server POC; a multi-worker deploy needs a DB/Redis lock.`
+
+Test-only switches, honoured only when `ENVIRONMENT=test`: `AMPERA_FAKE_MCP=1` (scripted browser),
+`AMPERA_FAKE_SANDBOX=1` (a fake healthy sandbox, no Docker) and `AMPERA_FAKE_GIT_REMOTE=<path>` (push
+to a local bare repo while the stored https URL stays unchanged). The frontend e2e suite sets all three.
 
 ## Test
 
@@ -117,13 +150,17 @@ uv run pytest
 uv run ruff check .
 ```
 
+`pytest` skips tests marked `docker` and `browser` by default (`addopts`); run them with
+`uv run pytest -m docker` / `-m browser` on a machine with Docker / Node. `git` tests use a local
+bare repo and run by default.
+
 ## Known limitations (Foundation release)
 
 - **Password reset email:** no email provider is configured. In `development` the reset link is
   written to the server log; in other environments the request is accepted but nothing is sent.
-- **Agents available:** Project Orchestrator, Requirements, Architecture, Planning, Budget and
-  Development (scaffold script with static validation and repair). Nothing generated is run or
-  tested beyond `bash -n` and shellcheck: whether `npm install` etc. succeed is not checked.
+- **Agents available:** Project Orchestrator, Requirements, Architecture, Planning, Budget,
+  Development (scaffold script), UI/UX Designer, Implementer, Tester and Deployer. The scaffold script
+  itself is never executed; the Implementation stage runs its own manifest in the Docker sandbox.
 - **Checkpointer:** the official `MongoDBSaver` uses a synchronous client in a thread pool (one
   extra MongoDB connection pool per worker).
 - **Login throttling** is per email + IP (`login_attempts`, auto-deleted after 24 h by a TTL index).

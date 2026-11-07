@@ -5,14 +5,41 @@ from app.modules.artifacts.models import ValidationIssue
 from app.modules.delivery.facts import Facts
 from app.modules.projects.spec_schema import ProjectSpecification
 
-IMPLEMENTED = {"requirements", "architecture", "plan", "budget", "code"}
-ORDER = ["requirements", "architecture", "plan", "budget", "code"]
-REQUIRED_APPROVAL = {"requirements", "architecture", "plan", "budget", "code"}
+IMPLEMENTED = {
+    "requirements",
+    "architecture",
+    "plan",
+    "budget",
+    "code",
+    "design",
+    "implementation",
+    "testing",
+    "deploy",
+}
+ORDER = [
+    "requirements", "architecture", "plan", "budget", "code",
+    "design", "implementation", "testing", "deploy",
+]  # fmt: skip
+REQUIRED_APPROVAL = {
+    "requirements",
+    "architecture",
+    "plan",
+    "budget",
+    "code",
+    "design",
+    "implementation",
+    "testing",
+    "deploy",
+}
 DEPENDS_ON = {
     "architecture": ["requirements"],
     "plan": ["requirements", "architecture"],
     "budget": ["plan", "architecture"],
     "code": ["architecture", "plan"],
+    "design": ["requirements", "architecture"],
+    "implementation": ["code", "design"],
+    "testing": ["implementation"],
+    "deploy": ["testing"],
 }
 MAX_QUESTIONS = 7
 # What actually reaches the client per turn, and how many answered rounds before it must proceed.
@@ -104,7 +131,8 @@ def default_plan(facts: Facts, brief: ProjectSpecification | None) -> PlanConten
         for s in ORDER
     ]
     next_action, next_stage = "done", None
-    for s in (x for x in ORDER if x in IMPLEMENTED):
+    # deploy starts only from the user's Push to repo action, never as a next step
+    for s in (x for x in ORDER if x in IMPLEMENTED and x != "deploy"):
         f = facts.stages.get(s)
         if f is None or not f.has_draft or f.stale:
             next_action, next_stage = "run_stage", s

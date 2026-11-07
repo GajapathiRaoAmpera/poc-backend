@@ -15,7 +15,9 @@ async def test_flow_to_done_through_code(db, harness):
     assert rev.validation.ok, rev.validation.issues
     assert {s.kind for s in rev.sources} == {"architecture", "plan"}
     await artifacts.approve(db, project, "code", 1, owner, None)
-    assert await h.resume("approved:code") is None
+    assert await h.resume("approved:code") == approval("design")
+    await artifacts.approve(db, project, "design", 1, owner, None)
+    assert await h.resume("approved:design") is None
 
 
 async def test_architecture_change_marks_code_stale(db, harness):
@@ -38,6 +40,8 @@ async def test_rates_change_keeps_code_fresh(db, harness):
     await _to_code(db, h, owner, project)
     await artifacts.approve(db, project, "code", 1, owner, None)
     await h.resume("approved:code")
+    await artifacts.approve(db, project, "design", 1, owner, None)
+    await h.resume("approved:design")
     await _new_rates(db, project, owner)
     assert await h.start("rates_changed") == approval("budget", 2)
     await artifacts.approve(db, project, "budget", 2, owner, None)

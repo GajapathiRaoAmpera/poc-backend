@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,15 +17,27 @@ from app.modules.auth.router import router as auth_router
 from app.modules.changesets.router import router as changesets_router
 from app.modules.conversations.router import router as conversations_router
 from app.modules.delivery.router import router as delivery_router
+from app.modules.media.router import router as media_router
 from app.modules.orchestration.router import router as workflow_router
 from app.modules.projects.router import router as projects_router
 from app.modules.ratecard.router import admin_router as ratecard_admin_router
 from app.modules.ratecard.router import router as ratecard_router
 from app.modules.ratecard.service import seed_default
+from app.modules.sandbox import service as sandbox_service
+from app.modules.sandbox.router import router as sandbox_router
 from app.modules.users.router import router as users_router
 from app.modules.voice.router import router as voice_router
 
 logger = logging.getLogger(__name__)
+
+
+async def _reap_sandboxes() -> None:
+    while True:
+        await asyncio.sleep(60)
+        try:
+            await sandbox_service.reap_idle()
+        except Exception:
+            logger.exception("Sandbox idle reaper failed")
 
 
 @asynccontextmanager
@@ -39,7 +53,11 @@ async def lifespan(_: FastAPI):
             "Cannot connect to MongoDB. Check MONGODB_URI, and in Atlas allow this machine's "
             "IP under Network Access."
         ) from exc
+    reaper = asyncio.create_task(_reap_sandboxes())
     yield
+    reaper.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await reaper
     await close_client()
 
 
@@ -71,6 +89,8 @@ def create_app() -> FastAPI:
     api.include_router(changesets_router)
     api.include_router(conversations_router)
     api.include_router(voice_router)
+    api.include_router(media_router)
+    api.include_router(sandbox_router)
     app.include_router(api)
     return app
 
