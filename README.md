@@ -117,6 +117,72 @@ uv run pytest
 uv run ruff check .
 ```
 
+## Deploy (Cloud Run)
+
+[`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml): every PR/push runs ruff + pytest; a push to
+`main` builds the [`Dockerfile`](Dockerfile) (multi-stage, non-root) and deploys one image twice:
+
+- **API** → Cloud Run service `poc-backend-api` (public URL, scales to zero).
+- **Worker** → Cloud Run worker pool `poc-backend-worker` (1 always-on instance running
+  `python -m app.worker`; a normal service would freeze it between requests).
+
+Clients: web sets `BACKEND_URL=<API URL>` on the Next.js host (it proxies `/api/*`); mobile builds with
+`--dart-define=API_URL=<API URL>`. Set `APP_ORIGIN` to the web app's public URL or browser writes get 403.
+
+Local check: `docker build -t poc-backend .` then
+`docker run --env-file .env -e PORT=8080 -p 8080:8080 poc-backend` (worker: append `python -m app.worker`).
+
+One-time setup (replace `PROJECT`, `REGION`, `OWNER/REPO`):
+
+```bash
+gcloud config set project PROJECT
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+  secretmanager.googleapis.com iamcredentials.googleapis.com
+gcloud artifacts repositories create poc-backend --repository-format docker --location REGION
+
+# Secrets (all three must exist; the deploy references them)
+printf '%s' 'mongodb+srv://...' | gcloud secrets create mongodb-uri --data-file=-
+printf '%s' 'gsk_...'           | gcloud secrets create groq-api-key --data-file=-
+printf '%s' 'AIza...'           | gcloud secrets create gemini-api-key --data-file=-
+
+# Runtime identity (what the containers run as): may read secrets only
+gcloud iam service-accounts create poc-runtime
+gcloud projects add-iam-policy-binding PROJECT \
+  --member serviceAccount:poc-runtime@PROJECT.iam.gserviceaccount.com --role roles/secretmanager.secretAccessor
+
+# Deploy identity (what GitHub Actions runs as)
+gcloud iam service-accounts create poc-deployer
+for role in run.admin artifactregistry.writer iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding PROJECT \
+    --member serviceAccount:poc-deployer@PROJECT.iam.gserviceaccount.com --role roles/$role
+done
+
+# Let only this GitHub repo impersonate the deployer (Workload Identity Federation, no key file)
+gcloud iam workload-identity-pools create github --location global
+gcloud iam workload-identity-pools providers create-oidc github --location global \
+  --workload-identity-pool github --issuer-uri https://token.actions.githubusercontent.com \
+  --attribute-mapping google.subject=assertion.sub,attribute.repository=assertion.repository \
+  --attribute-condition "assertion.repository == 'OWNER/REPO'"
+gcloud iam service-accounts add-iam-policy-binding poc-deployer@PROJECT.iam.gserviceaccount.com \
+  --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/projects/$(gcloud projects describe PROJECT --format 'value(projectNumber)')/locations/global/workloadIdentityPools/github/attribute.repository/OWNER/REPO"
+```
+
+GitHub → Settings → Secrets and variables → Actions → **Variables**:
+
+| Variable | Example |
+|---|---|
+| `GCP_PROJECT_ID` | `my-project` |
+| `GCP_REGION` | `asia-south1` |
+| `GCP_WIF_PROVIDER` | `projects/<number>/locations/global/workloadIdentityPools/github/providers/github` |
+| `GCP_DEPLOY_SA` | `poc-deployer@my-project.iam.gserviceaccount.com` |
+| `GCP_RUNTIME_SA` | `poc-runtime@my-project.iam.gserviceaccount.com` |
+| `APP_ORIGIN` | `https://app.example.com` (the web app's URL) |
+| `MONGODB_DB` | `ampera` |
+
+MongoDB Atlas → Network Access: Cloud Run has no fixed outbound IP, so allow `0.0.0.0/0` (relies on the
+DB password) or add a VPC connector + Cloud NAT static IP and allow only that.
+
 ## Known limitations (Foundation release)
 
 - **Password reset email:** no email provider is configured. In `development` the reset link is
