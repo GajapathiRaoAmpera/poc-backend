@@ -83,5 +83,7 @@ async def test_start_delivery_is_idempotent(db):
 @pytest.mark.parametrize("status,gate", [("FAILED", "failed"), ("DONE", "done")])
 async def test_terminal_notices_carry_a_gate_for_styling(db, status, gate):
     _, project = await _thread(db, status)
-    msg = await db.messages.find_one({"project_id": project.id, "role": "system"}, sort=[("seq", -1)])
+    msg = await db.messages.find_one(
+        {"project_id": project.id, "role": "system"}, sort=[("seq", -1)]
+    )
     assert msg["refs"]["gate"] == gate
